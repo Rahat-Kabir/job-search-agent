@@ -17,3 +17,7 @@ wheels/
 
 # Personal CV files
 *.pdf
+
+# Project docs
+CLAUDE.md
+SPEC.md
