@@ -104,6 +104,37 @@ User Message → /chat endpoint → Orchestrator (intent detection)
 
 ---
 
+## Phase 6: Security Hardening
+| Task | Status |
+|------|--------|
+| CORS restricted to frontend domain | Done |
+| Rate limiting with slowapi + Redis | Done |
+| File size limit on uploads (5 MB) | Done |
+
+---
+
+### Security Details
+
+#### CORS (`backend/api/app.py`)
+- Origins restricted via `CORS_ORIGINS` env var (default: `http://localhost:5173`)
+- Methods limited to `GET`, `POST`, `PUT`, `DELETE`
+- Headers limited to `Content-Type`, `Authorization`
+
+#### Rate Limiting (`backend/api/limiter.py`)
+- Backend: Redis (`redis://localhost:6379`)
+- `POST /chat` — 5 requests/minute per IP
+- `POST /chat/upload` — 3 requests/minute per IP
+- `POST /cv/upload` — 3 requests/minute per IP
+- `POST /search` — 3 requests/minute per IP
+- Exceeding limit returns `429 Too Many Requests`
+
+#### File Size Limit
+- Max upload size: 5 MB
+- Applied to `/cv/upload` and `/chat/upload`
+- Exceeding limit returns `413 Request Entity Too Large`
+
+---
+
 ## Known Issue
 **Token usage** still elevated due to Deep Agents sub-agent architecture.
 

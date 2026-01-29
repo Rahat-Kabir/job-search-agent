@@ -16,6 +16,7 @@ export default function Chat() {
   const [messages, setMessages] = useState([WELCOME_MESSAGE]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [streamingStatus, setStreamingStatus] = useState(null);
   const messagesEndRef = useRef(null);
 
   // Load chat history on mount
@@ -47,6 +48,7 @@ export default function Chat() {
   const handleSend = async (message) => {
     setError(null);
     setIsLoading(true);
+    setStreamingStatus(null);
 
     // Optimistically add user message
     const userMsg = {
@@ -59,22 +61,37 @@ export default function Chat() {
     setMessages((prev) => [...prev, userMsg]);
 
     try {
-      const data = await api.sendMessage(message, sessionId);
-
-      // Save session ID
-      if (!sessionId && data.session_id) {
-        setSessionId(data.session_id);
-        localStorage.setItem('chatSessionId', data.session_id);
-      }
-
-      // Update messages with server response
-      setMessages(data.messages);
+      await api.sendMessageStream(
+        message,
+        sessionId,
+        // onStatus callback
+        (status) => {
+          setStreamingStatus(status.message);
+        },
+        // onComplete callback
+        (result) => {
+          if (!sessionId && result.session_id) {
+            setSessionId(result.session_id);
+            localStorage.setItem('chatSessionId', result.session_id);
+          }
+          // Add the assistant message to existing messages
+          setMessages((prev) => [...prev, result.message]);
+          setIsLoading(false);
+          setStreamingStatus(null);
+        },
+        // onError callback
+        (error) => {
+          setError(error.message);
+          setMessages((prev) => prev.slice(0, -1));
+          setIsLoading(false);
+          setStreamingStatus(null);
+        }
+      );
     } catch (err) {
       setError(err.message);
-      // Remove optimistic message on error
       setMessages((prev) => prev.slice(0, -1));
-    } finally {
       setIsLoading(false);
+      setStreamingStatus(null);
     }
   };
 
@@ -159,10 +176,17 @@ export default function Chat() {
           {isLoading && (
             <div className="flex justify-start mb-4">
               <div className="bg-[rgb(var(--card))] border border-[rgb(var(--border))] rounded-2xl rounded-bl-md px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[rgb(var(--muted-foreground))] animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 rounded-full bg-[rgb(var(--muted-foreground))] animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 rounded-full bg-[rgb(var(--muted-foreground))] animate-bounce" style={{ animationDelay: '300ms' }} />
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 rounded-full bg-[rgb(var(--primary))] animate-pulse" />
+                    <div className="w-2 h-2 rounded-full bg-[rgb(var(--primary))] animate-pulse" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 rounded-full bg-[rgb(var(--primary))] animate-pulse" style={{ animationDelay: '300ms' }} />
+                  </div>
+                  {streamingStatus && (
+                    <span className="text-sm text-[rgb(var(--muted-foreground))]">
+                      {streamingStatus}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

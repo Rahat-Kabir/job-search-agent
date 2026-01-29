@@ -132,3 +132,55 @@ export async function getChatHistory(sessionId) {
 
   return res.json();
 }
+
+// SSE Streaming Chat API
+export async function sendMessageStream(message, sessionId, onStatus, onComplete, onError) {
+  try {
+    const response = await fetch(`${API_BASE}/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, session_id: sessionId }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to send message');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() || '';
+
+      for (const chunk of lines) {
+        if (!chunk.trim()) continue;
+
+        const eventMatch = chunk.match(/^event: (\w+)/);
+        const dataMatch = chunk.match(/^data: (.+)$/m);
+
+        if (eventMatch && dataMatch) {
+          const event = eventMatch[1];
+          try {
+            const data = JSON.parse(dataMatch[1]);
+
+            if (event === 'status') onStatus?.(data);
+            else if (event === 'done') onComplete?.(data);
+            else if (event === 'error') onError?.(data);
+          } catch (parseError) {
+            console.error('Failed to parse SSE data:', parseError);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    onError?.({ message: err.message });
+    throw err;
+  }
+}

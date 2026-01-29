@@ -2,20 +2,25 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from backend.agents.orchestrator import create_orchestrator_with_hitl, truncate_cv
+from backend.api.limiter import limiter
 from backend.api.schemas import CVUploadResponse, ProfileResponse, SkillResponse
 from backend.db import Profile, Preferences, User, get_db
 from backend.tools.pdf_parser import parse_pdf as parse_pdf_tool
 from backend.utils.parser import parse_profile_response
 
+MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5 MB
+
 router = APIRouter()
 
 
 @router.post("/upload", response_model=CVUploadResponse)
+@limiter.limit("3/minute")
 async def upload_cv(
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -23,8 +28,10 @@ async def upload_cv(
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
-    # Parse PDF
+    # Check file size
     content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 5 MB.")
     try:
         cv_text = parse_pdf_tool.invoke({"pdf_content": content})
     except Exception as e:

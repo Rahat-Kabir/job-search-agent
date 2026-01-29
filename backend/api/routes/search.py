@@ -3,10 +3,11 @@
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.agents.orchestrator import create_orchestrator_with_hitl
+from backend.api.limiter import limiter
 from backend.api.schemas import JobResultResponse, SearchRequest, SearchResultsResponse
 from backend.db import JobResult, Preferences, Profile, SearchSession, get_db
 from backend.utils.parser import parse_jobs_response
@@ -104,7 +105,9 @@ def run_search(search_id: str, profile_context: str, db_url: str):
 
 
 @router.post("")
+@limiter.limit("3/minute")
 def start_search(
+    request: Request,
     background_tasks: BackgroundTasks,
     data: SearchRequest | None = None,
     x_user_id: str = Header(..., alias="X-User-ID"),

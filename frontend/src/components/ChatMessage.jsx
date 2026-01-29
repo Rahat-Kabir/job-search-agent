@@ -1,3 +1,4 @@
+import ReactMarkdown from 'react-markdown';
 import JobCard from './JobCard';
 
 export default function ChatMessage({ message }) {
@@ -71,7 +72,23 @@ export default function ChatMessage({ message }) {
             : 'bg-[rgb(var(--card))] border border-[rgb(var(--border))] rounded-2xl rounded-bl-md px-4 py-3'
         }`}
       >
-        <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+        {isUser ? (
+          <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+        ) : (
+          <div className="prose-chat text-sm leading-relaxed">
+            <ReactMarkdown
+              components={{
+                a: ({ href, children }) => (
+                  <a href={href} target="_blank" rel="noopener noreferrer" className="text-[rgb(var(--accent))] underline hover:opacity-80">
+                    {children}
+                  </a>
+                ),
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
+        )}
         {renderProfile()}
         {renderJobs()}
       </div>
