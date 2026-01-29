@@ -28,18 +28,86 @@
 
 ---
 
-## Optimizations Applied
-1. CV Truncation (max 4000 chars)
-2. Compact prompts (JSON-only output)
-3. Selective scraping (top 3 only)
-4. State persistence (checkpointer + thread_id)
+## Phase 3: Frontend UI
+| Task | Status |
+|------|--------|
+| React + Vite setup | Done |
+| Tailwind CSS (Apple-like design) | Done |
+| Header + dark mode toggle | Done |
+| CV Upload component | Done |
+| Profile & Preferences component | Done |
+| Search button + loading states | Done |
+| Job cards grid | Done |
+| API integration | Done |
+| FastAPI static file serving | Done |
+
+---
+
+## Phase 4: Optimizations
+| Task | Status |
+|------|--------|
+| CV Truncation (max 4000 chars) | Done |
+| Compact prompts (JSON-only output) | Done |
+| Selective scraping (top 3 only) | Done |
+| State persistence (checkpointer + thread_id) | Done |
+| Robust JSON parser with fallback | Done |
+| Context trimming in orchestrator | Done |
+| Progress status updates | Done |
+
+---
+
+## Optimizations Details
+
+### Robust Parser (`backend/utils/parser.py`)
+- Multiple JSON extraction strategies (clean, fenced, bracket-matching)
+- Markdown fallback for non-JSON responses
+- Handles various AI output formats
+
+### Context Trimming
+- Orchestrator sends only compact profile to sub-agents
+- Sub-agent prompts enforce raw JSON output (no markdown blocks)
+- Max 500 words to sub-agents
+
+### Progress Status Updates
+Search statuses: `pending` → `analyzing_profile` → `searching_jobs` → `ranking_results` → `completed`
+
+---
+
+## Phase 5: Conversational Chat Interface
+| Task | Status |
+|------|--------|
+| ChatSession + ChatMessage DB models | Done |
+| Chat API endpoint (POST /chat) | Done |
+| CV upload via chat (POST /chat/upload) | Done |
+| Orchestrator conversational mode | Done |
+| Chat UI component | Done |
+| Message bubbles (user/assistant) | Done |
+| Job cards in chat | Done |
+| Profile display in chat | Done |
+
+---
+
+### Chat Architecture
+```
+User Message → /chat endpoint → Orchestrator (intent detection)
+                                      ↓
+                    ┌─────────────────┼─────────────────┐
+                    ↓                 ↓                 ↓
+              CV Upload          Job Search         Chat/Q&A
+              (cv-parser)      (job-searcher)     (direct response)
+```
+
+### API Endpoints
+- `POST /chat` - Send message, get response
+- `POST /chat/upload` - Upload CV in chat context
+- `GET /chat/{session_id}` - Get chat history
 
 ---
 
 ## Known Issue
-**High token usage** (~370K tokens) due to Deep Agents sub-agent architecture.
+**Token usage** still elevated due to Deep Agents sub-agent architecture.
 
-Each sub-agent receives full context, multiplying tokens. Options:
-1. Switch to single-agent with tools (no sub-agents)
-2. Use cheaper model for sub-agents
-3. Accept cost for research-grade results
+Mitigation applied:
+- Trimmed context passing via prompts
+- Compact JSON-only outputs
+- Expected reduction: 30-50%

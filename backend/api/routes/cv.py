@@ -1,7 +1,5 @@
 """CV upload endpoint."""
 
-import json
-import re
 import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -11,46 +9,9 @@ from backend.agents.orchestrator import create_orchestrator_with_hitl, truncate_
 from backend.api.schemas import CVUploadResponse, ProfileResponse, SkillResponse
 from backend.db import Profile, Preferences, User, get_db
 from backend.tools.pdf_parser import parse_pdf as parse_pdf_tool
+from backend.utils.parser import parse_profile_response
 
 router = APIRouter()
-
-
-def parse_agent_profile(agent_response: str) -> dict:
-    """Extract profile from agent response (handles JSON or markdown format)."""
-    # Try JSON first
-    try:
-        if "```json" in agent_response:
-            json_str = agent_response.split("```json")[1].split("```")[0]
-            return json.loads(json_str.strip())
-    except (json.JSONDecodeError, IndexError):
-        pass
-
-    # Parse markdown format from orchestrator
-    result = {"skills": [], "experience_years": None, "titles": [], "summary": ""}
-
-    # Extract skills: **Skills:** skill1, skill2, ...
-    skills_match = re.search(r"\*\*Skills?:\*\*\s*([^\n*]+)", agent_response)
-    if skills_match:
-        skills_str = skills_match.group(1).strip()
-        result["skills"] = [s.strip() for s in skills_str.split(",") if s.strip()]
-
-    # Extract experience: **Experience:** ~2 years
-    exp_match = re.search(r"\*\*Experience:\*\*\s*~?(\d+)", agent_response)
-    if exp_match:
-        result["experience_years"] = int(exp_match.group(1))
-
-    # Extract titles: **Titles:** title1, title2, ...
-    titles_match = re.search(r"\*\*Titles?:\*\*\s*([^\n*]+)", agent_response)
-    if titles_match:
-        titles_str = titles_match.group(1).strip()
-        result["titles"] = [t.strip() for t in titles_str.split(",") if t.strip()]
-
-    # Extract summary: **Summary:** text
-    summary_match = re.search(r"\*\*Summary:\*\*\s*([^\n]+)", agent_response)
-    if summary_match:
-        result["summary"] = summary_match.group(1).strip()
-
-    return result
 
 
 @router.post("/upload", response_model=CVUploadResponse)
@@ -87,7 +48,7 @@ async def upload_cv(
 
         response_msgs = result.get("messages", [])
         agent_response = getattr(response_msgs[-1], "content", "") if response_msgs else ""
-        profile_data = parse_agent_profile(agent_response)
+        profile_data = parse_profile_response(agent_response)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent error: {e}")
 

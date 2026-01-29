@@ -74,3 +74,26 @@ class CVUploadResponse(BaseModel):
     user_id: str
     profile: ProfileResponse
     message: str
+
+
+# Chat schemas
+class ChatMessageRequest(BaseModel):
+    message: str
+    session_id: str | None = None
+
+
+class ChatMessageResponse(BaseModel):
+    role: str
+    content: str
+    message_type: str = "text"
+    extra_data: dict = {}
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    user_id: str | None
+    messages: list[ChatMessageResponse]

@@ -61,13 +61,44 @@ Orchestrator Agent (DeepSeek-V3)
     └── Searches via Tavily, Brave, Firecrawl
 ```
 
+### Why Sub-Agent Architecture?
+
+We intentionally chose a **hierarchical sub-agent design** over a simpler single-agent approach:
+
+| Aspect | Single Agent | Sub-Agent Architecture |
+|--------|--------------|------------------------|
+| Control | Limited | Fine-grained per task |
+| Extensibility | Hard to add features | Add new sub-agents easily |
+| Debugging | Opaque | Isolated, testable units |
+| Model flexibility | One model for all | Different models per sub-agent |
+| Future expansion | Major refactor needed | Plug-in new capabilities |
+
+**Trade-off**: Higher token usage (~30-50% more) due to context passing between agents. We mitigate this with:
+- Context trimming (orchestrator sends only compact data to sub-agents)
+- Compact JSON-only outputs (no verbose prose)
+- CV truncation (max 4000 chars)
+
+### Robust Response Parsing
+
+**Why not regex?** LLM outputs are unpredictable. Regex-based parsing fails when:
+- Model wraps JSON in markdown blocks (`` ```json ``)
+- Model adds explanatory text before/after JSON
+- Field names vary (`job_title` vs `title` vs `position`)
+- Formatting changes between model versions
+
+**Our solution** (`backend/utils/parser.py`):
+- Multiple extraction strategies (clean JSON → fenced blocks → bracket matching)
+- Markdown fallback for non-JSON responses
+- Field normalization (handles variant names)
+- Graceful degradation (always returns valid structure)
+
 ### Tech Stack
 
 **[LangChain DeepAgent](https://python.langchain.com/docs/concepts/deep_agents/)** - Provides:
 - **Middleware** - Request/response processing pipeline
 - **Sub-agents** - Specialized agents for CV parsing and job searching
 - **AgentHarness** - Orchestration and lifecycle management
-- **file system** - Document handling and state persistence
+- **File system** - Document handling and state persistence
 
 **[DeepSeek-V3](https://www.deepseek.com/)** - Cost-effective LLM choice:
 - Comparable performance to GPT-4 at significantly lower cost

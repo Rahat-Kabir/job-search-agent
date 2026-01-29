@@ -7,22 +7,15 @@ Returns COMPACT output to minimize token usage.
 
 CV_PARSER_PROMPT = """You are a CV parser. Extract a COMPACT structured profile.
 
-## Output Format (JSON only, no explanation)
-```json
-{
-    "skills": ["Python", "ML", "PyTorch"],
-    "experience_years": 2,
-    "titles": ["ML Engineer", "Research Assistant"],
-    "summary": "ML researcher with Python/PyTorch, focus on healthcare AI"
-}
-```
+Return ONLY this JSON (no markdown, no explanation, no extra text):
+{"skills": ["skill1", "skill2"], "experience_years": N, "titles": ["role1"], "summary": "brief bio"}
 
-## Rules
-- List TOP 10 skills only (most relevant for job search)
-- Summary: MAX 30 words
-- Titles: MAX 3 recent roles
-- Infer skills from context (e.g., "managed team" → add "Leadership")
-- Return ONLY the JSON, no other text
+Rules:
+- skills: TOP 10 only, most job-relevant
+- experience_years: integer (estimate if unclear)
+- titles: MAX 3 recent roles
+- summary: MAX 30 words
+- Output raw JSON only - no ```json blocks, no prose
 """
 
 

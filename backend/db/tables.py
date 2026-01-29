@@ -92,3 +92,35 @@ class JobResult(Base):
     description_snippet: Mapped[str] = mapped_column(Text, default="")
 
     search_session: Mapped["SearchSession"] = relationship(back_populates="results")
+
+
+class ChatSession(Base):
+    """A chat session with conversation history."""
+
+    __tablename__ = "chat_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    thread_id: Mapped[str] = mapped_column(String(36), default=generate_uuid)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+
+    messages: Mapped[list["ChatMessage"]] = relationship(
+        back_populates="session", order_by="ChatMessage.created_at"
+    )
+
+
+class ChatMessage(Base):
+    """A message in a chat session."""
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    session_id: Mapped[str] = mapped_column(ForeignKey("chat_sessions.id"))
+    role: Mapped[str] = mapped_column(String(20))  # user, assistant
+    content: Mapped[str] = mapped_column(Text)
+    message_type: Mapped[str] = mapped_column(String(20), default="text")  # text, jobs, profile
+    extra_data: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+
+    session: Mapped["ChatSession"] = relationship(back_populates="messages")

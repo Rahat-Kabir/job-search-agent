@@ -1,7 +1,5 @@
 """Search endpoints."""
 
-import json
-import re
 import uuid
 from datetime import UTC, datetime
 
@@ -11,87 +9,17 @@ from sqlalchemy.orm import Session
 from backend.agents.orchestrator import create_orchestrator_with_hitl
 from backend.api.schemas import JobResultResponse, SearchRequest, SearchResultsResponse
 from backend.db import JobResult, Preferences, Profile, SearchSession, get_db
+from backend.utils.parser import parse_jobs_response
 
 router = APIRouter()
 
 
-def parse_job_results(agent_response: str) -> list[dict]:
-    """Extract job results from agent response (handles JSON or markdown)."""
-    # Try JSON first
-    try:
-        if "```json" in agent_response:
-            json_str = agent_response.split("```json")[1].split("```")[0]
-            results = json.loads(json_str.strip())
-            if isinstance(results, list):
-                return results
-    except (json.JSONDecodeError, IndexError):
-        pass
-
-    results = []
-    # Split by numbered items: 1. **Title** or 2. **Title**
-    job_blocks = re.split(r"\n\d+\.\s+\*\*", agent_response)
-
-    for block in job_blocks[1:]:  # Skip first empty split
-        job = {}
-
-        # Format 1: "Title** (Score: 90%)"
-        # Format 2: "Title** - Company" with "Score: 90/100" on separate line
-        title_line = block.split("\n")[0]
-
-        # Try Format 1: Title** (Score: XX%)
-        title_match = re.match(r"([^*]+)\*\*\s*\(Score:\s*(\d+)", title_line)
-        if title_match:
-            title_text = title_match.group(1).strip()
-            if " at " in title_text:
-                parts = title_text.rsplit(" at ", 1)
-                job["title"] = parts[0].strip()
-                job["company"] = parts[1].strip()
-            else:
-                job["title"] = title_text
-            job["score"] = int(title_match.group(2))
-        else:
-            # Format 2: Title** - Company
-            title_match2 = re.match(r"([^*]+)\*\*\s*[-–]\s*(.+)", title_line)
-            if title_match2:
-                job["title"] = title_match2.group(1).strip()
-                job["company"] = title_match2.group(2).strip()
-
-        # Extract score from separate line: - Score: 90/100 or Score: 90%
-        score_match = re.search(r"Score:\s*(\d+)", block)
-        if score_match and "score" not in job:
-            job["score"] = int(score_match.group(1))
-
-        # Extract match reason: - Match: ... or **Match:** ...
-        match_match = re.search(r"Match:\s*([^\n]+)", block)
-        if match_match:
-            job["reason"] = match_match.group(1).strip()
-
-        # Extract reason if labeled differently
-        reason_match = re.search(r"Reason:\s*([^\n]+)", block)
-        if reason_match and "reason" not in job:
-            job["reason"] = reason_match.group(1).strip()
-
-        # Extract URL from markdown link: [text](url) or plain URL
-        url_match = re.search(r"\]\((https?://[^\)]+)\)", block)
-        if url_match:
-            job["url"] = url_match.group(1)
-        else:
-            url_match2 = re.search(r"(https?://[^\s\)]+)", block)
-            if url_match2:
-                job["url"] = url_match2.group(1)
-
-        # Extract location
-        if re.search(r"\bremote\b", block.lower()):
-            job["location"] = "remote"
-        elif re.search(r"\bonsite\b", block.lower()):
-            job["location"] = "onsite"
-        elif re.search(r"\bhybrid\b", block.lower()):
-            job["location"] = "hybrid"
-
-        if job.get("title"):
-            results.append(job)
-
-    return results
+def _update_status(db, search_id: str, status: str):
+    """Helper to update search status."""
+    search = db.query(SearchSession).filter(SearchSession.id == search_id).first()
+    if search:
+        search.status = status
+        db.commit()
 
 
 def run_search(search_id: str, profile_context: str, db_url: str):
@@ -113,32 +41,39 @@ def run_search(search_id: str, profile_context: str, db_url: str):
         if not search:
             return
 
-        search.status = "running"
-        db.commit()
+        # Status: Analyzing profile
+        _update_status(db, search_id, "analyzing_profile")
+        logger.info(f"[{search_id}] Analyzing profile...")
 
-        # Create agent and run search
-        logger.info(f"Starting search {search_id}")
         agent, _ = create_orchestrator_with_hitl()
         config = {"configurable": {"thread_id": str(uuid.uuid4())}}
 
-        # Send profile, then approve to trigger job search
-        # Step 1: Send profile
-        messages = [{"role": "user", "content": f"Here's my profile:\n\n{profile_context}"}]
+        # Step 1: Send compact profile (context already trimmed by caller)
+        messages = [{"role": "user", "content": f"Find jobs for:\n{profile_context}"}]
         result = agent.invoke({"messages": messages}, config=config)
 
-        # Step 2: Approve/confirm to trigger actual job search
+        # Status: Searching jobs
+        _update_status(db, search_id, "searching_jobs")
+        logger.info(f"[{search_id}] Searching jobs...")
+
+        # Step 2: Approve to trigger job search
         messages.append({"role": "user", "content": "approve"})
         result = agent.invoke({"messages": messages}, config=config)
+
+        # Status: Ranking results
+        _update_status(db, search_id, "ranking_results")
+        logger.info(f"[{search_id}] Ranking results...")
 
         response_msgs = result.get("messages", [])
         agent_response = getattr(response_msgs[-1], "content", "") if response_msgs else ""
 
         logger.info(f"Agent response length: {len(agent_response)}")
-        logger.info(f"Agent response: {agent_response[:500]}...")
+        logger.info(f"Agent response preview: {agent_response[:500]}...")
 
         # Parse and store results
-        jobs = parse_job_results(agent_response)
-        logger.info(f"Parsed {len(jobs)} jobs")
+        jobs = parse_jobs_response(agent_response)
+        logger.info(f"[{search_id}] Parsed {len(jobs)} jobs")
+
         for job in jobs:
             job_result = JobResult(
                 search_id=search_id,
@@ -151,15 +86,18 @@ def run_search(search_id: str, profile_context: str, db_url: str):
             )
             db.add(job_result)
 
-        search.status = "completed"
-        search.completed_at = datetime.now(UTC)
-        db.commit()
-
-    except Exception as e:
+        # Status: Completed
         search = db.query(SearchSession).filter(SearchSession.id == search_id).first()
         if search:
-            search.status = "failed"
+            search.status = "completed"
+            search.completed_at = datetime.now(UTC)
             db.commit()
+
+        logger.info(f"[{search_id}] Search completed with {len(jobs)} results")
+
+    except Exception as e:
+        logger.error(f"[{search_id}] Search failed: {e}")
+        _update_status(db, search_id, "failed")
         raise e
     finally:
         db.close()

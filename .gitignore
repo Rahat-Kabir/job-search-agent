@@ -9,6 +9,10 @@ wheels/
 # Virtual environments
 .venv
 
+# Node.js
+node_modules/
+frontend/dist/
+
 # Environment variables (contains API keys)
 .env
 
@@ -19,5 +23,6 @@ wheels/
 *.pdf
 
 # Project docs
-CLAUDE.md
-SPEC.md
+CLAUDE.md 
+SPEC.md 
+
