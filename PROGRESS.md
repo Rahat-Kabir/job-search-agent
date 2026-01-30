@@ -135,6 +135,53 @@ User Message → /chat endpoint → Orchestrator (intent detection)
 
 ---
 
+## Phase 7: UI Redesign (Bold & Vibrant → Apple Calm)
+| Task | Status |
+|------|--------|
+| Sidebar with chat history | Done |
+| Enhanced JobCard with score ring, bookmark, Apply CTA | Done |
+| Message slide-in animations | Done |
+| Typing indicator with bouncing dots | Done |
+| Drag-and-drop CV upload in ChatInput | Done |
+| Removed legacy components (CVUpload, Profile, SearchButton, JobResults, Header) | Done |
+
+### Phase 7b: Apple-like Calm Redesign
+| Task | Status |
+|------|--------|
+| Replace gradient palette with Apple Indigo flat colors | Done |
+| Light theme: white (#FFFFFF) + warm gray (#F5F5F7) | Done |
+| Dark theme: true black (#000000) + dark gray (#1C1C1E) | Done |
+| Remove all gradient backgrounds (buttons, bubbles, logo) | Done |
+| Remove ambient gradient blobs | Done |
+| Remove gradient-text and gradient-border CSS classes | Done |
+| Flat indigo accent on buttons, send, apply CTA | Done |
+| Soften card shadows and border-radius | Done |
+
+---
+
+### Redesign Details
+
+#### Design Direction: "Apple Calm"
+- **Palette**: Indigo (#5856D6 light / #7D7AFF dark) flat accent — no gradients
+- **Typography**: Outfit (display/headings), DM Sans (body text)
+- **Dark theme**: True black (#000000) with neutral grays (#1C1C1E, #38383A)
+- **Light theme**: Pure white (#FFFFFF) with warm gray (#F5F5F7)
+- **Shadows**: Minimal (0 1px 2px), no colored glow shadows
+- **Border-radius**: 0.75rem (cards), 0.75rem (buttons)
+
+#### Components
+- **Sidebar** (`Sidebar.jsx`): Persistent left panel with session history, flat indigo "New Chat" button, relative timestamps, delete per session, collapsible on mobile
+- **ScoreRing** (in `JobCard.jsx`): SVG circular progress with animated fill, color-coded (green ≥80, amber ≥60, gray <60)
+
+#### Removed Components
+- `CVUpload.jsx` — replaced by inline ChatInput upload
+- `Profile.jsx` — replaced by inline chat profile display
+- `SearchButton.jsx` — replaced by chat-driven search
+- `JobResults.jsx` — replaced by inline chat job cards
+- `Header.jsx` — integrated directly into Chat.jsx
+
+---
+
 ## Known Issue
 **Token usage** still elevated due to Deep Agents sub-agent architecture.
 

@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 
 export default function ChatInput({ onSend, onUpload, isLoading }) {
   const [message, setMessage] = useState('');
+  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleSubmit = (e) => {
@@ -27,19 +28,40 @@ export default function ChatInput({ onSend, onUpload, isLoading }) {
     }
   };
 
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      onUpload(file);
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-3 p-4 border-t border-[rgb(var(--border))] bg-[rgb(var(--background))]">
+    <form
+      onSubmit={handleSubmit}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+      className={`flex items-end gap-2.5 p-3 lg:p-4 border-t transition-colors duration-200
+        ${dragOver
+          ? 'border-[rgb(var(--accent))] bg-[rgb(var(--accent)/_0.05)]'
+          : 'border-[rgb(var(--border))] bg-[rgb(var(--background)/_0.8)]'
+        } backdrop-blur-lg`}
+    >
       {/* File upload button */}
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
         disabled={isLoading}
-        className="flex-shrink-0 p-3 rounded-xl bg-[rgb(var(--muted))] hover:bg-[rgb(var(--border))] transition-colors disabled:opacity-50"
-        title="Upload CV"
+        className="flex-shrink-0 p-2.5 rounded-xl bg-[rgb(var(--muted))] hover:bg-[rgb(var(--border))]
+          transition-all duration-200 disabled:opacity-40 hover:scale-105 active:scale-95
+          group"
+        title="Upload CV (PDF)"
       >
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+        <svg className="w-5 h-5 text-[rgb(var(--muted-foreground))] group-hover:text-[rgb(var(--accent))] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round"
+            d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
         </svg>
       </button>
       <input
@@ -56,11 +78,11 @@ export default function ChatInput({ onSend, onUpload, isLoading }) {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message or upload your CV..."
+          placeholder={dragOver ? 'Drop your CV here...' : 'Ask about jobs, upload your CV...'}
           disabled={isLoading}
           rows={1}
-          className="w-full input resize-none max-h-32 pr-12"
-          style={{ minHeight: '48px' }}
+          className="w-full input resize-none max-h-32 pr-4 text-sm"
+          style={{ minHeight: '44px' }}
         />
       </div>
 
@@ -68,17 +90,23 @@ export default function ChatInput({ onSend, onUpload, isLoading }) {
       <button
         type="submit"
         disabled={!message.trim() || isLoading}
-        className="flex-shrink-0 p-3 rounded-xl bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] hover:opacity-90 transition-opacity disabled:opacity-50"
+        className="flex-shrink-0 p-2.5 rounded-xl transition-all duration-200
+          disabled:opacity-30 disabled:cursor-not-allowed
+          hover:scale-105 active:scale-95"
+        style={{
+          backgroundColor: message.trim() && !isLoading
+            ? 'rgb(var(--accent))'
+            : 'rgb(var(--muted))',
+        }}
       >
         {isLoading ? (
-          <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 animate-spin text-[rgb(var(--muted-foreground))]" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
         ) : (
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          <svg className={`w-5 h-5 ${message.trim() ? 'text-white' : 'text-[rgb(var(--muted-foreground))]'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
           </svg>
         )}
       </button>

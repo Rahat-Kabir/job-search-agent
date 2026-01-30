@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
+import Sidebar from './Sidebar';
 import * as api from '../api';
 
 const WELCOME_MESSAGE = {
   role: 'assistant',
-  content: "Hi! I'm your job search assistant. Upload your CV or tell me about your skills and experience, and I'll help you find the perfect job.",
+  content: "Hey! I'm your AI job search agent. Upload your CV or describe your skills, and I'll find roles that match you perfectly.",
   message_type: 'text',
   extra_data: {},
   created_at: new Date().toISOString(),
@@ -17,7 +18,26 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [streamingStatus, setStreamingStatus] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [dark, setDark] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('theme') === 'dark' ||
+        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
   const messagesEndRef = useRef(null);
+
+  // Dark mode
+  useEffect(() => {
+    if (dark) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [dark]);
 
   // Load chat history on mount
   useEffect(() => {
@@ -29,7 +49,7 @@ export default function Chat() {
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, streamingStatus]);
 
   const loadHistory = async () => {
     try {
@@ -39,18 +59,37 @@ export default function Chat() {
       }
     } catch (err) {
       console.error('Failed to load history:', err);
-      // Clear invalid session
       localStorage.removeItem('chatSessionId');
       setSessionId(null);
     }
   };
+
+  const saveSession = useCallback((sid, firstMessage) => {
+    const sessions = JSON.parse(localStorage.getItem('chatSessions') || '[]');
+    const existing = sessions.find(s => s.id === sid);
+    if (!existing) {
+      sessions.unshift({
+        id: sid,
+        title: firstMessage?.substring(0, 40) || 'New conversation',
+        preview: firstMessage?.substring(0, 80) || '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      localStorage.setItem('chatSessions', JSON.stringify(sessions));
+    } else {
+      existing.updatedAt = new Date().toISOString();
+      if (firstMessage) {
+        existing.preview = firstMessage.substring(0, 80);
+      }
+      localStorage.setItem('chatSessions', JSON.stringify(sessions));
+    }
+  }, []);
 
   const handleSend = async (message) => {
     setError(null);
     setIsLoading(true);
     setStreamingStatus(null);
 
-    // Optimistically add user message
     const userMsg = {
       role: 'user',
       content: message,
@@ -64,22 +103,21 @@ export default function Chat() {
       await api.sendMessageStream(
         message,
         sessionId,
-        // onStatus callback
         (status) => {
           setStreamingStatus(status.message);
         },
-        // onComplete callback
         (result) => {
           if (!sessionId && result.session_id) {
             setSessionId(result.session_id);
             localStorage.setItem('chatSessionId', result.session_id);
+            saveSession(result.session_id, message);
+          } else if (sessionId) {
+            saveSession(sessionId, message);
           }
-          // Add the assistant message to existing messages
           setMessages((prev) => [...prev, result.message]);
           setIsLoading(false);
           setStreamingStatus(null);
         },
-        // onError callback
         (error) => {
           setError(error.message);
           setMessages((prev) => prev.slice(0, -1));
@@ -99,10 +137,9 @@ export default function Chat() {
     setError(null);
     setIsLoading(true);
 
-    // Optimistically add upload message
     const userMsg = {
       role: 'user',
-      content: `[Uploading: ${file.name}]`,
+      content: `Uploading: ${file.name}`,
       message_type: 'text',
       extra_data: {},
       created_at: new Date().toISOString(),
@@ -112,17 +149,15 @@ export default function Chat() {
     try {
       const data = await api.uploadCVChat(file, sessionId);
 
-      // Save session ID
       if (!sessionId && data.session_id) {
         setSessionId(data.session_id);
         localStorage.setItem('chatSessionId', data.session_id);
+        saveSession(data.session_id, `Uploaded ${file.name}`);
       }
 
-      // Update messages with server response
       setMessages(data.messages);
     } catch (err) {
       setError(err.message);
-      // Remove optimistic message on error
       setMessages((prev) => prev.slice(0, -1));
     } finally {
       setIsLoading(false);
@@ -134,75 +169,131 @@ export default function Chat() {
     setSessionId(null);
     setMessages([WELCOME_MESSAGE]);
     setError(null);
+    setSidebarOpen(false);
+  };
+
+  const handleSelectSession = async (sid) => {
+    setSessionId(sid);
+    localStorage.setItem('chatSessionId', sid);
+    setError(null);
+    try {
+      const data = await api.getChatHistory(sid);
+      if (data.messages.length > 0) {
+        setMessages(data.messages);
+      }
+    } catch (err) {
+      console.error('Failed to load session:', err);
+      setMessages([WELCOME_MESSAGE]);
+    }
   };
 
   return (
-    <div className="flex flex-col h-screen max-h-screen">
-      {/* Header */}
-      <header className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-[rgb(var(--border))] bg-[rgb(var(--background))]">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[rgb(var(--primary))] flex items-center justify-center">
-            <svg className="w-6 h-6 text-[rgb(var(--primary-foreground))]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="font-semibold">Job Search Agent</h1>
-            <p className="text-xs text-[rgb(var(--muted-foreground))]">AI-powered job matching</p>
-          </div>
-        </div>
-        <button
-          onClick={handleNewChat}
-          className="text-sm px-4 py-2 rounded-lg bg-[rgb(var(--muted))] hover:bg-[rgb(var(--border))] transition-colors"
-        >
-          New Chat
-        </button>
-      </header>
+    <div className="flex h-screen max-h-screen overflow-hidden relative">
+      {/* Sidebar */}
+      <Sidebar
+        currentSessionId={sessionId}
+        onSelectSession={handleSelectSession}
+        onNewChat={handleNewChat}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
-      {/* Messages */}
-      <main className="flex-1 overflow-y-auto px-4 py-6">
-        <div className="max-w-3xl mx-auto">
-          {error && (
-            <div className="mb-4 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
-              {error}
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col min-w-0 relative z-10">
+        {/* Header */}
+        <header className="flex-shrink-0 flex items-center justify-between px-4 lg:px-6 py-3 border-b border-[rgb(var(--border))] bg-[rgb(var(--background)/_0.8)] backdrop-blur-lg">
+          <div className="flex items-center gap-3">
+            {/* Mobile hamburger */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-lg hover:bg-[rgb(var(--muted))] transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
+            {/* Logo */}
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-[rgb(var(--accent))]"
+            >
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
             </div>
-          )}
+            <div>
+              <h1 className="text-base font-bold tracking-tight accent-text">Job Search Agent</h1>
+              <p className="text-[11px] text-[rgb(var(--muted-foreground))] -mt-0.5">AI-powered job matching</p>
+            </div>
+          </div>
 
-          {messages.map((msg, idx) => (
-            <ChatMessage key={idx} message={msg} />
-          ))}
+          {/* Theme toggle */}
+          <button
+            onClick={() => setDark(!dark)}
+            className="p-2.5 rounded-xl bg-[rgb(var(--muted))] hover:bg-[rgb(var(--border))] transition-all duration-200 hover:scale-105 active:scale-95"
+            aria-label="Toggle dark mode"
+          >
+            {dark ? (
+              <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
+        </header>
 
-          {isLoading && (
-            <div className="flex justify-start mb-4">
-              <div className="bg-[rgb(var(--card))] border border-[rgb(var(--border))] rounded-2xl rounded-bl-md px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 rounded-full bg-[rgb(var(--primary))] animate-pulse" />
-                    <div className="w-2 h-2 rounded-full bg-[rgb(var(--primary))] animate-pulse" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 rounded-full bg-[rgb(var(--primary))] animate-pulse" style={{ animationDelay: '300ms' }} />
+        {/* Messages */}
+        <main className="flex-1 overflow-y-auto px-4 py-6">
+          <div className="max-w-3xl mx-auto">
+            {error && (
+              <div className="mb-4 p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm message-enter flex items-center gap-2">
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {error}
+              </div>
+            )}
+
+            {messages.map((msg, idx) => (
+              <ChatMessage key={idx} message={msg} />
+            ))}
+
+            {isLoading && (
+              <div className="flex justify-start mb-4 message-enter">
+                <div className="bg-[rgb(var(--card))] border border-[rgb(var(--border))] rounded-2xl rounded-bl-md px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex gap-1.5">
+                      <div className="w-2 h-2 rounded-full typing-dot bg-[rgb(var(--accent))]" />
+                      <div className="w-2 h-2 rounded-full typing-dot bg-[rgb(var(--accent)/_0.6)]" />
+                      <div className="w-2 h-2 rounded-full typing-dot bg-[rgb(var(--accent)/_0.3)]" />
+                    </div>
+                    {streamingStatus && (
+                      <span className="text-sm text-[rgb(var(--muted-foreground))] italic">
+                        {streamingStatus}
+                      </span>
+                    )}
                   </div>
-                  {streamingStatus && (
-                    <span className="text-sm text-[rgb(var(--muted-foreground))]">
-                      {streamingStatus}
-                    </span>
-                  )}
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} />
+          </div>
+        </main>
+
+        {/* Input */}
+        <div className="flex-shrink-0 max-w-3xl mx-auto w-full">
+          <ChatInput
+            onSend={handleSend}
+            onUpload={handleUpload}
+            isLoading={isLoading}
+          />
         </div>
-      </main>
-
-      {/* Input */}
-      <div className="flex-shrink-0 max-w-3xl mx-auto w-full">
-        <ChatInput
-          onSend={handleSend}
-          onUpload={handleUpload}
-          isLoading={isLoading}
-        />
       </div>
     </div>
   );
