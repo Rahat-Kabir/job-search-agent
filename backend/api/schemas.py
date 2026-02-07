@@ -97,3 +97,49 @@ class ChatResponse(BaseModel):
     session_id: str
     user_id: str | None
     messages: list[ChatMessageResponse]
+
+
+class ChatSessionResponse(BaseModel):
+    id: str
+    title: str
+    preview: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChatSessionListResponse(BaseModel):
+    sessions: list[ChatSessionResponse]
+
+
+# Bookmark schemas
+class BookmarkCreate(BaseModel):
+    session_id: str
+    title: str
+    company: str
+    match_score: float = 0.0
+    match_reason: str = ""
+    location_type: str = "unknown"
+    salary: str | None = None
+    posting_url: str
+    description_snippet: str = ""
+
+
+class BookmarkResponse(BaseModel):
+    id: str
+    session_id: str
+    title: str
+    company: str
+    match_score: float
+    match_reason: str
+    location_type: str
+    salary: str | None
+    posting_url: str
+    description_snippet: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BookmarkListResponse(BaseModel):
+    bookmarks: list[BookmarkResponse]

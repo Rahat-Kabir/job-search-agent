@@ -1,16 +1,27 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import * as api from '../api';
+import JobCard from './JobCard';
 
-export default function Sidebar({ currentSessionId, onSelectSession, onNewChat, isOpen, onClose }) {
+export default function Sidebar({ currentSessionId, onSelectSession, onNewChat, isOpen, onClose, bookmarks = [], onRemoveBookmark }) {
   const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('chats'); // 'chats' or 'bookmarks'
+
+  const loadSessions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.listSessions();
+      setSessions(data.sessions || []);
+    } catch (err) {
+      console.error('Failed to load sessions:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadSessions();
-  }, [currentSessionId]);
-
-  const loadSessions = () => {
-    const stored = JSON.parse(localStorage.getItem('chatSessions') || '[]');
-    setSessions(stored);
-  };
+  }, [currentSessionId, loadSessions]);
 
   const formatTime = (dateStr) => {
     const date = new Date(dateStr);
@@ -27,13 +38,16 @@ export default function Sidebar({ currentSessionId, onSelectSession, onNewChat, 
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const handleDelete = (e, sessionId) => {
+  const handleDelete = async (e, sessionId) => {
     e.stopPropagation();
-    const updated = sessions.filter(s => s.id !== sessionId);
-    localStorage.setItem('chatSessions', JSON.stringify(updated));
-    setSessions(updated);
-    if (currentSessionId === sessionId) {
-      onNewChat();
+    try {
+      await api.deleteSession(sessionId);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      if (currentSessionId === sessionId) {
+        onNewChat();
+      }
+    } catch (err) {
+      console.error('Failed to delete session:', err);
     }
   };
 
@@ -65,11 +79,44 @@ export default function Sidebar({ currentSessionId, onSelectSession, onNewChat, 
             </svg>
             New Chat
           </button>
+          
+          {/* Tab Buttons */}
+          <div className="flex mt-3 bg-[rgb(var(--muted))] rounded-lg p-1">
+            <button
+              onClick={() => setActiveTab('chats')}
+              className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-md transition-all ${
+                activeTab === 'chats'
+                  ? 'bg-[rgb(var(--background))] text-[rgb(var(--foreground))] shadow-sm'
+                  : 'text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
+              }`}
+            >
+              Chats
+            </button>
+            <button
+              onClick={() => setActiveTab('bookmarks')}
+              className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1 ${
+                activeTab === 'bookmarks'
+                  ? 'bg-[rgb(var(--background))] text-[rgb(var(--foreground))] shadow-sm'
+                  : 'text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
+              }`}
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              </svg>
+              Saved {bookmarks.length > 0 && `(${bookmarks.length})`}
+            </button>
+          </div>
         </div>
 
-        {/* Session List */}
-        <nav className="flex-1 overflow-y-auto p-2">
-          {sessions.length === 0 ? (
+        {/* Content based on active tab */}
+        {activeTab === 'chats' ? (
+          /* Session List */
+          <nav className="flex-1 overflow-y-auto p-2">
+          {loading && sessions.length === 0 ? (
+            <div className="px-3 py-8 text-center">
+              <p className="text-xs text-[rgb(var(--muted-foreground))]">Loading...</p>
+            </div>
+          ) : sessions.length === 0 ? (
             <div className="px-3 py-8 text-center">
               <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-[rgb(var(--muted))] flex items-center justify-center">
                 <svg className="w-5 h-5 text-[rgb(var(--muted-foreground))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -109,7 +156,7 @@ export default function Sidebar({ currentSessionId, onSelectSession, onNewChat, 
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
                         <span className="text-[10px] text-[rgb(var(--muted-foreground))]">
-                          {formatTime(session.updatedAt || session.createdAt)}
+                          {formatTime(session.updated_at || session.created_at)}
                         </span>
                         <button
                           onClick={(e) => handleDelete(e, session.id)}
@@ -128,6 +175,34 @@ export default function Sidebar({ currentSessionId, onSelectSession, onNewChat, 
             </div>
           )}
         </nav>
+        ) : (
+          /* Bookmarks List */
+          <div className="flex-1 overflow-y-auto p-2">
+            {bookmarks.length === 0 ? (
+              <div className="px-3 py-8 text-center">
+                <div className="w-10 h-10 mx-auto mb-3 rounded-xl bg-[rgb(var(--muted))] flex items-center justify-center">
+                  <svg className="w-5 h-5 text-[rgb(var(--muted-foreground))]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                  </svg>
+                </div>
+                <p className="text-xs text-[rgb(var(--muted-foreground))]">No bookmarked jobs</p>
+                <p className="text-xs text-[rgb(var(--muted-foreground))] mt-1">Save jobs from search results</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {bookmarks.map((bookmark, index) => (
+                  <JobCard
+                    key={bookmark.id}
+                    job={bookmark}
+                    index={index}
+                    isBookmarked={true}
+                    onUnbookmark={() => onRemoveBookmark?.(bookmark)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Sidebar Footer */}
         <div className="flex-shrink-0 p-3 border-t border-[rgb(var(--border))]">

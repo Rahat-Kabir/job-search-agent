@@ -2,6 +2,7 @@
 
 from backend.db.base import Base, get_db, init_db
 from backend.db.tables import (
+    Bookmark,
     ChatMessage,
     ChatSession,
     JobResult,
@@ -22,4 +23,5 @@ __all__ = [
     "JobResult",
     "ChatSession",
     "ChatMessage",
+    "Bookmark",
 ]

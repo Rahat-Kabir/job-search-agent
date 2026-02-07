@@ -133,8 +133,136 @@ export async function getChatHistory(sessionId) {
   return res.json();
 }
 
+export async function listSessions() {
+  const res = await fetch(`${API_BASE}/chat/sessions`);
+
+  if (!res.ok) {
+    throw new Error('Failed to fetch sessions');
+  }
+
+  return res.json();
+}
+
+export async function deleteSession(sessionId) {
+  const res = await fetch(`${API_BASE}/chat/${sessionId}`, {
+    method: 'DELETE',
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to delete session');
+  }
+
+  return res.json();
+}
+
+// HITL Confirmation (SSE streaming)
+export async function confirmAction(sessionId, approved, onStatus, onComplete, onError) {
+  try {
+    const response = await fetch(`${API_BASE}/chat/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, approved }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to confirm action');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() || '';
+
+      for (const chunk of lines) {
+        if (!chunk.trim()) continue;
+
+        const eventMatch = chunk.match(/^event: (\w+)/);
+        const dataMatch = chunk.match(/^data: (.+)$/m);
+
+        if (eventMatch && dataMatch) {
+          const event = eventMatch[1];
+          try {
+            const data = JSON.parse(dataMatch[1]);
+
+            if (event === 'status') onStatus?.(data);
+            else if (event === 'agent_event') onStatus?.({ stage: data.type, message: data.message });
+            else if (event === 'done') onComplete?.(data);
+            else if (event === 'error') onError?.(data);
+          } catch (parseError) {
+            console.error('Failed to parse SSE data:', parseError);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    onError?.({ message: err.message });
+    throw err;
+  }
+}
+
+// Get Job Details (Phase 2 - SSE streaming)
+export async function getJobDetails(sessionId, selectedUrls, onStatus, onComplete, onError) {
+  try {
+    const response = await fetch(`${API_BASE}/chat/get-details`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, selected_urls: selectedUrls }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get job details');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() || '';
+
+      for (const chunk of lines) {
+        if (!chunk.trim()) continue;
+
+        const eventMatch = chunk.match(/^event: (\w+)/);
+        const dataMatch = chunk.match(/^data: (.+)$/m);
+
+        if (eventMatch && dataMatch) {
+          const event = eventMatch[1];
+          try {
+            const data = JSON.parse(dataMatch[1]);
+
+            if (event === 'status') onStatus?.(data);
+            else if (event === 'agent_event') onStatus?.({ stage: data.type, message: data.message });
+            else if (event === 'done') onComplete?.(data);
+            else if (event === 'error') onError?.(data);
+          } catch (parseError) {
+            console.error('Failed to parse SSE data:', parseError);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    onError?.({ message: err.message });
+    throw err;
+  }
+}
+
 // SSE Streaming Chat API
-export async function sendMessageStream(message, sessionId, onStatus, onComplete, onError) {
+export async function sendMessageStream(message, sessionId, onStatus, onComplete, onError, onConfirmation) {
   try {
     const response = await fetch(`${API_BASE}/chat/stream`, {
       method: 'POST',
@@ -171,7 +299,9 @@ export async function sendMessageStream(message, sessionId, onStatus, onComplete
             const data = JSON.parse(dataMatch[1]);
 
             if (event === 'status') onStatus?.(data);
+            else if (event === 'agent_event') onStatus?.({ stage: data.type, message: data.message });
             else if (event === 'done') onComplete?.(data);
+            else if (event === 'confirmation') onConfirmation?.(data);
             else if (event === 'error') onError?.(data);
           } catch (parseError) {
             console.error('Failed to parse SSE data:', parseError);
@@ -183,4 +313,66 @@ export async function sendMessageStream(message, sessionId, onStatus, onComplete
     onError?.({ message: err.message });
     throw err;
   }
+}
+
+// Bookmark API
+export async function createBookmark(bookmark) {
+  const res = await fetch(`${API_BASE}/bookmarks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(bookmark),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || 'Failed to create bookmark');
+  }
+
+  return res.json();
+}
+
+export async function deleteBookmark(bookmarkId) {
+  const res = await fetch(`${API_BASE}/bookmarks/${bookmarkId}`, {
+    method: 'DELETE',
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || 'Failed to delete bookmark');
+  }
+
+  return res.json();
+}
+
+export async function deleteBookmarkByUrl(sessionId, postingUrl) {
+  const res = await fetch(`${API_BASE}/bookmarks/url/${sessionId}?posting_url=${encodeURIComponent(postingUrl)}`, {
+    method: 'DELETE',
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || 'Failed to delete bookmark');
+  }
+
+  return res.json();
+}
+
+export async function listBookmarks(sessionId) {
+  const res = await fetch(`${API_BASE}/bookmarks?session_id=${sessionId}`);
+
+  if (!res.ok) {
+    throw new Error('Failed to fetch bookmarks');
+  }
+
+  return res.json();
+}
+
+export async function checkBookmark(sessionId, postingUrl) {
+  const res = await fetch(`${API_BASE}/bookmarks/check?session_id=${sessionId}&posting_url=${encodeURIComponent(postingUrl)}`);
+
+  if (!res.ok) {
+    throw new Error('Failed to check bookmark');
+  }
+
+  return res.json();
 }

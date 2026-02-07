@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     langsmith_tracing: bool = True
 
     # Agent settings
-    max_search_results: int = 10
+    max_search_results: int = 15
     search_timeout: float = 30.0
 
     class Config:

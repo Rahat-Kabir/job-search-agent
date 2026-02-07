@@ -1,38 +1,65 @@
 # Job Search Agent
 
-Upload your CV, and the agent reads your skills, searches the web for matching jobs, and ranks them by how well they fit your profile , all through a simple chat interface.
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-0.2-1C3C3C?logo=langchain&logoColor=white)
+![DeepAgents](https://img.shields.io/badge/DeepAgents-0.1-FF6F00)
 
-Built on [LangChain DeepAgent](https://docs.langchain.com/oss/python/deepagents/overview) — a framework that lets an AI orchestrator delegate tasks to specialized sub-agents, each with their own tools, so the system can parse CVs, search the web, and rank results as separate focused steps.
+Upload your CV, and the agent reads your skills, searches the web for matching jobs, and ranks them by how well they fit your profile -- all through a simple chat interface. Built on [LangChain DeepAgent](https://docs.langchain.com/oss/python/deepagents/overview), a framework that lets an AI orchestrator delegate tasks to specialized sub-agents, each with their own tools.
 
-**Key Features:**
-- Upload a CV and get a structured profile (skills, experience, job titles) extracted automatically
-- Searches multiple job sources across the web simultaneously
-- Ranks and scores every job by how well it matches your profile
-- Chat-based UI — ask follow-up questions, refine search criteria, upload new CVs mid-conversation
+> **Demo coming soon** -- screenshot/GIF placeholder
+
+## Key Features
+
+- **CV upload** -- structured profile extraction (skills, experience, job titles)
+- **Two-phase job search** -- quick search (Tavily/Brave) returns 15 scored jobs, then detail scrape (Firecrawl) on selected jobs for salary, requirements, and benefits
+- **Job scoring 0-100** with match reasons explaining why each job fits your profile
+- **Human-in-the-loop** -- approve or reject before external API calls are made
+- **Real-time SSE streaming** with actual agent events (not polling)
+- **Chat interface** with session persistence across page reloads
+- **Guided onboarding UX** -- upload a CV or describe your skills to get started
+- **Apple-calm UI design** -- Indigo accent, Outfit + DM Sans typography, dark/light mode
+
+## Tech Stack
+
+| Layer | Technologies |
+|-------|-------------|
+| **Backend** | FastAPI, SQLAlchemy, Pydantic, slowapi |
+| **Frontend** | React 19, Vite 7, Tailwind CSS 4, react-markdown |
+| **Infrastructure** | PostgreSQL 16, Redis 7, Docker Compose |
+| **AI / Agents** | DeepAgents, LangChain, LangGraph, DeepSeek-V3 |
+| **Search** | Tavily, Brave Search, Firecrawl |
+| **PDF** | PyPDF |
 
 ## Quickstart
 
 ```bash
-# 1. Install dependencies
+# Prerequisites: Python 3.11+, Node.js, Docker
+
+# 1. Clone and install
+git clone <repo-url>
+cd job-search-agent
 uv sync
 
-# 2. Copy env file and add your API keys
-cp .env.example .env          # Linux/macOS
-Copy-Item .env.example .env   # Windows PowerShell
+# 2. Set up environment
+cp .env.example .env  # Then edit with your API keys
 
-# 3. Fill in required keys in .env:
-#    DEEPSEEK_API_KEY=your_key
-#    TAVILY_API_KEY=your_key
-
-# 4. Start PostgreSQL + Redis
+# 3. Start services
 docker compose up -d
 
-# 5. Start backend (http://127.0.0.1:8020)
+# 4. Start backend
 uv run uvicorn backend.api:app --reload --host 127.0.0.1 --port 8020
 
-# 6. Start frontend (http://localhost:5173)
+# 5. Start frontend (new terminal)
 cd frontend && npm install && npm run dev
 ```
+
+- Backend runs at **http://127.0.0.1:8020**
+- Frontend runs at **http://localhost:5173**
 
 ## CLI Usage
 
@@ -41,28 +68,10 @@ uv run python main.py "path/to/cv.pdf"
 ```
 
 The agent will:
-1. Parse your CV and extract skills/experience
-2. Show profile summary for confirmation
-3. Search for matching jobs via Tavily, Brave, Firecrawl
-4. Display ranked results with match scores
-
-The frontend runs on `http://localhost:5173` and is also served as static files by FastAPI in production (`npm run build` output).
-
-### Endpoints
-
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/chat` | POST | — | Send message, get response |
-| `/chat/stream` | POST | — | SSE streaming response |
-| `/chat/upload` | POST | — | Upload CV in chat context (returns `user_id`) |
-| `/chat/{session_id}` | GET | — | Get chat history |
-| `/cv/upload` | POST | — | Upload PDF CV, returns extracted profile + `user_id` |
-| `/profile` | GET | `X-User-ID` | Get current user profile |
-| `/preferences` | GET/PUT | `X-User-ID` | Get or update search preferences |
-| `/search` | POST | `X-User-ID` | Start background job search |
-| `/search/results` | GET | `X-User-ID` | Poll search results |
-
-**How to get a `user_id`:** Upload a CV via `POST /cv/upload` or `POST /chat/upload`. The response includes a `user_id` — use it as the `X-User-ID` header for profile, preferences, and search endpoints.
+1. Parse your CV and extract a structured profile (skills, experience, titles)
+2. Show the profile summary and ask for confirmation
+3. Request approval before calling external search APIs (HITL)
+4. Search for matching jobs and display ranked results with match scores
 
 ## Architecture
 
@@ -80,153 +89,150 @@ The frontend runs on `http://localhost:5173` and is also served as static files 
                      └──────────────┴──────┘   └────────────────┘
 ```
 
-### Agent System
+### Agent Hierarchy
 
-The core is an **Orchestrator agent** (`backend/agents/orchestrator.py`) built on DeepAgents + LangGraph, powered by DeepSeek LLM (temperature 0.1 for deterministic output).
+```
+Orchestrator (intent routing)
+├── cv-parser (PDF → JSON profile)
+├── quick-searcher (Tavily + Brave → 15 scored jobs)
+└── detail-scraper (Firecrawl → salary, requirements, benefits)
+```
 
-**Intent detection** — the orchestrator classifies every user message into one of four intents:
+### Intent Detection
+
+The orchestrator classifies every user message into one of four intents:
 
 | Intent | Action |
 |--------|--------|
 | `CV_UPLOAD` | Delegate to **CV Parser** sub-agent |
-| `SEARCH_JOBS` | Delegate to **Job Searcher** sub-agent |
+| `SEARCH_JOBS` | Delegate to **Quick Searcher** sub-agent |
 | `REFINE` | Re-run job search with updated criteria |
 | `CHAT` | Respond directly (no sub-agent needed) |
 
-**Sub-agents:**
+### Two-Phase Search Flow
 
-- **CV Parser** (`backend/agents/cv_parser.py`) — takes raw PDF text, outputs a compact JSON profile: `{skills[], experience_years, titles[], summary}`. Constrained to top-10 skills, max 3 titles, 30-word summary.
+**Phase 1 -- Quick Search:** The quick-searcher queries Tavily and Brave, returning up to 15 jobs with scores and match reasons. Results are displayed as selectable job cards with checkboxes.
 
-- **Job Searcher** (`backend/agents/job_searcher.py`) — has three tools:
-  1. **Tavily Search** — primary web search
-  2. **Brave Search** — backup/alternative
-  3. **Firecrawl** — deep-scrapes the top 3 job posting URLs for full content
+**Phase 2 -- Detail Scrape:** The user selects specific jobs of interest. The detail-scraper uses Firecrawl to deep-scrape those job posting URLs, extracting salary ranges, detailed requirements, and benefits.
 
-  Returns up to 10 jobs scored 0-100 with match reasons.
+## API Endpoints
 
-**State persistence** — each chat session gets a `thread_id` and the orchestrator uses LangGraph's `MemorySaver` to maintain conversation context across turns.
+### Chat Endpoints
 
-### Data Flow
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/chat/stream` | POST | SSE streaming chat response |
+| `/chat/confirm` | POST | Approve/reject HITL interrupt (SSE) |
+| `/chat/get-details` | POST | Detail scrape selected jobs (SSE) |
+| `/chat/upload` | POST | Upload CV in chat context |
+| `/chat/sessions` | GET | List all chat sessions |
+| `/chat/{session_id}` | GET | Get chat history |
+| `/chat/{session_id}` | DELETE | Delete session and messages |
 
-#### CV Upload → Profile Extraction
-```
-PDF file → PyPDF text extraction → truncate to 4000 chars
-  → Orchestrator → CV Parser sub-agent → JSON profile
-  → Save to PostgreSQL (User + Profile + Preferences)
-  → Return profile to frontend
-```
+### Other Endpoints
 
-#### Chat-Driven Job Search (SSE Streaming)
-```
-User message → POST /chat/stream
-  → Orchestrator detects SEARCH_JOBS intent
-  → Job Searcher sub-agent runs web searches
-  → Scrapes top 3 URLs via Firecrawl
-  → Scores & ranks jobs against user profile
-  → Streams status updates back via SSE
-  → Returns ranked job array → rendered as JobCards
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/cv/upload` | POST | Upload PDF, extract profile |
+| `/profile` | GET | Get user profile (`X-User-ID` header) |
+| `/preferences` | GET/PUT | Get or update preferences |
+| `/search` | POST | Background job search |
+| `/search/results` | GET | Poll results |
+| `/health` | GET | Health check |
 
-### Chat Architecture
-```
-User Message → /chat endpoint → Orchestrator (intent detection)
-                                      ↓
-                    ┌─────────────────┼─────────────────┐
-                    ↓                 ↓                 ↓
-              CV Upload          Job Search         Chat/Q&A
-              (cv-parser)      (job-searcher)     (direct response)
-```
+### SSE Event Types
 
-### Frontend
+| Event | Description |
+|-------|-------------|
+| `status` | Progress updates during agent processing |
+| `agent_event` | Tool calls and sub-agent activity |
+| `confirmation` | HITL approval request |
+| `done` | Final response with results |
+| `error` | Error details |
 
-React SPA with a chat-first interface. Design system: "Apple Calm" — flat indigo accent (#5856D6), Outfit + DM Sans typography, dark/light mode.
+## Frontend
+
+### Component Tree
 
 ```
 Chat.jsx (main container, SSE streaming, session management)
-├── Sidebar.jsx        — chat session history, new chat, delete
-├── ChatMessage.jsx    — renders text (markdown), job cards, or profile
+├── Sidebar.jsx        — session history, new chat, delete
+├── ChatMessage.jsx    — renders text (markdown), job cards, profile, onboarding
 │   └── JobCard.jsx    — score ring (SVG), match reason, bookmark, apply CTA
 └── ChatInput.jsx      — message input, drag-and-drop PDF upload
 ```
 
-- **SSE streaming** — real-time status updates while agent processes
-- **Session persistence** — localStorage for session list, API for message history
-- **Responsive** — collapsible sidebar with backdrop overlay on mobile
+### Design
 
-### Database Schema
+"Apple Calm" -- flat indigo accent (`#5856D6`), Outfit + DM Sans typography, dark/light mode. Responsive layout with collapsible sidebar and backdrop overlay on mobile.
+
+## Database Schema
 
 ```
-User ──┬── Profile (1:1)        skills, experience, cv_text
-       ├── Preferences (1:1)    location_type, target_roles, min_salary
-       ├── SearchSession (1:N)  status progression, results
-       │     └── JobResult (1:N)  title, company, score, url
-       └── ChatSession (1:N)    thread_id for agent state
-             └── ChatMessage (1:N)  role, content, message_type, extra_data
+User ──┬── Profile (1:1)
+       ├── Preferences (1:1)
+       ├── SearchSession (1:N) → JobResult (1:N)
+       └── ChatSession (1:N) → ChatMessage (1:N)
 ```
 
-Search status progression: `pending → analyzing_profile → searching_jobs → ranking_results → completed`
-
-### Security
-
-- **CORS** — origins restricted via `CORS_ORIGINS` env var
-- **Rate limiting** — Redis-backed via slowapi (5 req/min chat, 3 req/min uploads)
-- **File size limit** — 5 MB max for PDF uploads
-
-### Why Sub-Agent Architecture?
-
-We intentionally chose a **hierarchical sub-agent design** over a simpler single-agent approach:
-
-| Aspect | Single Agent | Sub-Agent Architecture |
-|--------|--------------|------------------------|
-| Control | Limited | Fine-grained per task |
-| Extensibility | Hard to add features | Add new sub-agents easily |
-| Debugging | Opaque | Isolated, testable units |
-| Model flexibility | One model for all | Different models per sub-agent |
-| Future expansion | Major refactor needed | Plug-in new capabilities |
-
-**Trade-off**: Higher token usage (~30-50% more) due to context passing between agents. We mitigate this with:
-- Context trimming (orchestrator sends only compact data to sub-agents)
-- Compact JSON-only outputs (no verbose prose)
-- CV truncation (max 4000 chars)
-
-### Robust Response Parsing
-
-**Why not regex?** LLM outputs are unpredictable. Regex-based parsing fails when:
-- Model wraps JSON in markdown blocks (`` ```json ``)
-- Model adds explanatory text before/after JSON
-- Field names vary (`job_title` vs `title` vs `position`)
-- Formatting changes between model versions
-
-**Our solution** (`backend/utils/parser.py`):
-- Multiple extraction strategies (clean JSON → fenced blocks → bracket matching)
-- Markdown fallback for non-JSON responses
-- Field normalization (handles variant names)
-- Graceful degradation (always returns valid structure)
-
-### Tech Stack
-
-**[LangChain DeepAgent](https://python.langchain.com/docs/concepts/deep_agents/)** — Provides:
-- **Middleware** — request/response processing pipeline
-- **Sub-agents** — specialized agents for CV parsing and job searching
-- **AgentHarness** — orchestration and lifecycle management
-- **File system** — document handling and state persistence
-
-**[DeepSeek-V3](https://www.deepseek.com/)** — Cost-effective LLM choice:
-- Comparable performance to GPT-4 at significantly lower cost
-- Ideal for multi-agent architectures where token usage multiplies
+LangGraph checkpoint tables are auto-created by `PostgresSaver`.
 
 ## Environment Variables
 
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DEEPSEEK_API_KEY` | Yes | LLM provider |
+| `TAVILY_API_KEY` | Yes | Primary web search |
+| `BRAVE_API_KEY` | No | Backup web search |
+| `FIRECRAWL_API_KEY` | No | Deep page scraping |
+| `DATABASE_URL` | No | PostgreSQL connection string |
+| `REDIS_URL` | No | Rate limiting backend |
+| `CORS_ORIGINS` | No | Allowed frontend origins |
+| `LANGSMITH_API_KEY` | No | LangSmith tracing |
+| `LANGSMITH_TRACING` | No | Enable tracing (`true`/`false`) |
+
+## Project Structure
+
 ```
-DEEPSEEK_API_KEY=       # Required
-TAVILY_API_KEY=         # Required
-BRAVE_API_KEY=          # Optional
-FIRECRAWL_API_KEY=      # Optional
-LANGSMITH_API_KEY=      # Optional (for tracing)
-DATABASE_URL=           # Optional (for persistence)
+job-search-agent/
+├── backend/
+│   ├── agents/           # AI agent definitions
+│   │   ├── orchestrator.py
+│   │   ├── cv_parser.py
+│   │   ├── quick_searcher.py
+│   │   ├── detail_scraper.py
+│   │   ├── job_searcher.py
+│   │   ├── checkpointer.py
+│   │   └── AGENTS.md
+│   ├── api/
+│   │   ├── app.py        # FastAPI application
+│   │   ├── routes/       # API endpoints
+│   │   └── schemas.py    # Pydantic models
+│   ├── db/               # Database models + session
+│   ├── utils/            # Parser, helpers
+│   └── config.py
+├── frontend/
+│   └── src/
+│       ├── components/   # React components
+│       ├── api.js        # API client
+│       └── App.jsx
+├── scripts/              # CLI test scripts
+├── docs/                 # Tech spec, progress tracking
+├── docker-compose.yml
+├── pyproject.toml
+├── main.py               # CLI entry point
+└── .env.example
 ```
 
 ## Known Limitations
 
-- **Token usage** — elevated due to sub-agent context passing (~30-50% overhead), mitigated by trimming and compact outputs
-- **Session memory** — agent state stored in-memory (`MemorySaver`), lost on server restart; production would need a persistent checkpointer
+- **Token usage** -- elevated (~30-50% overhead) due to sub-agent context passing, mitigated by trimming and compact outputs
+- **No authentication** -- user identified by `X-User-ID` header from CV upload
+
+## Contributing
+
+Contributions welcome! Please open an issue first to discuss proposed changes.
+
+## License
+
+MIT

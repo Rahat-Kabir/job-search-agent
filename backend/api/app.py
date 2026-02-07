@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 
+from backend.agents.checkpointer import close_checkpointer, init_checkpointer
 from backend.api.limiter import limiter
 from backend.db.base import init_db
 
@@ -24,12 +25,24 @@ FRONTEND_DIR = Path(__file__).parent.parent.parent / "frontend" / "dist"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database on startup."""
+    """Initialize database and checkpointer on startup, clean up on shutdown."""
     try:
         init_db()
     except ValueError:
         pass  # Database not configured, skip init
+
+    try:
+        await init_checkpointer()
+        print("[STARTUP] Async PostgreSQL checkpointer initialized")
+    except ValueError as e:
+        print(f"[STARTUP] Checkpointer skipped: {e}")
+    except Exception as e:
+        print(f"[STARTUP] Checkpointer error: {e}")
+
     yield
+
+    await close_checkpointer()
+    print("[SHUTDOWN] Checkpointer closed")
 
 
 app = FastAPI(
@@ -61,13 +74,14 @@ app.add_middleware(
 
 
 # Import and include routers
-from backend.api.routes import chat, cv, preferences, profile, search  # noqa: E402
+from backend.api.routes import bookmarks, chat, cv, preferences, profile, search  # noqa: E402
 
 app.include_router(cv.router, prefix="/cv", tags=["CV"])
 app.include_router(profile.router, prefix="/profile", tags=["Profile"])
 app.include_router(preferences.router, prefix="/preferences", tags=["Preferences"])
 app.include_router(search.router, prefix="/search", tags=["Search"])
 app.include_router(chat.router, prefix="/chat", tags=["Chat"])
+app.include_router(bookmarks.router, prefix="/bookmarks", tags=["Bookmarks"])
 
 
 @app.get("/health")

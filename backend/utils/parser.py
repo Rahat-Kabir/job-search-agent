@@ -256,10 +256,38 @@ def parse_jobs_response(text: str) -> list[dict]:
     # Try JSON extraction first
     result = extract_json(text, expect_array=True)
     if isinstance(result, list):
-        return [_normalize_job(job) for job in result if isinstance(job, dict)]
+        jobs = [_normalize_job(job) for job in result if isinstance(job, dict)]
+        # Filter: valid jobs must have URL or meaningful company
+        return [j for j in jobs if j.get("url") or (j.get("company") and j["company"] != "Unknown")]
 
     # Fallback: parse markdown format
-    return _parse_jobs_markdown(text)
+    jobs = _parse_jobs_markdown(text)
+    # Filter: valid jobs must have URL or meaningful company
+    return [j for j in jobs if j.get("url") or (j.get("company") and j["company"] != "Unknown")]
+
+
+def parse_job_details_response(text: str) -> list[dict]:
+    """
+    Parse enriched job details from detail-scraper response.
+
+    Returns list of dicts with: url, salary, description, requirements, benefits
+    """
+    result = extract_json(text, expect_array=True)
+    if isinstance(result, list):
+        return [_normalize_job_details(d) for d in result if isinstance(d, dict)]
+    return []
+
+
+def _normalize_job_details(data: dict) -> dict:
+    """Normalize enriched job detail data."""
+    return {
+        "url": data.get("url", ""),
+        "salary": data.get("salary"),
+        "description": data.get("description", ""),
+        "requirements": data.get("requirements", []),
+        "benefits": data.get("benefits", []),
+        "apply_url": data.get("apply_url", ""),
+    }
 
 
 def _normalize_job(data: dict) -> dict:

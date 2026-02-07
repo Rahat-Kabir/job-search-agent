@@ -32,8 +32,8 @@ function ScoreRing({ score }) {
   );
 }
 
-export default function JobCard({ job, index = 0 }) {
-  const [saved, setSaved] = useState(false);
+export default function JobCard({ job, index = 0, selectable = false, selected = false, onSelect, isBookmarked = false, onBookmark, onUnbookmark }) {
+  const [bookmarkLoading, setBookmarkLoading] = useState(false);
   const score = Math.round(job.match_score * 100);
 
   const locationColors = {
@@ -46,12 +46,46 @@ export default function JobCard({ job, index = 0 }) {
   const locationType = job.location_type?.toLowerCase() || '';
   const locationClass = locationColors[locationType] || 'bg-[rgb(var(--muted))] text-[rgb(var(--muted-foreground))]';
 
+  const handleBookmarkClick = async (e) => {
+    e.stopPropagation();
+    if (bookmarkLoading) return;
+    
+    setBookmarkLoading(true);
+    try {
+      if (isBookmarked) {
+        await onUnbookmark?.(job);
+      } else {
+        await onBookmark?.(job);
+      }
+    } finally {
+      setBookmarkLoading(false);
+    }
+  };
+
   return (
     <div
-      className="card p-4 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 group"
+      className={`card p-4 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 group ${selected ? 'ring-2 ring-[rgb(var(--accent))] bg-[rgb(var(--accent)/_0.05)]' : ''}`}
       style={{ animationDelay: `${index * 80}ms` }}
+      onClick={selectable ? () => onSelect?.(!selected) : undefined}
     >
       <div className="flex items-start gap-3">
+        {/* Checkbox for selection mode */}
+        {selectable && (
+          <div className="flex-shrink-0 pt-1">
+            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+              selected
+                ? 'border-[rgb(var(--accent))] bg-[rgb(var(--accent))]'
+                : 'border-[rgb(var(--border))] hover:border-[rgb(var(--accent)/_0.5)]'
+            }`}>
+              {selected && (
+                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Score Ring */}
         <ScoreRing score={score} />
 
@@ -70,11 +104,12 @@ export default function JobCard({ job, index = 0 }) {
 
             {/* Bookmark */}
             <button
-              onClick={() => setSaved(!saved)}
-              className="p-1 rounded-md hover:bg-[rgb(var(--muted))] transition-colors flex-shrink-0 opacity-0 group-hover:opacity-100"
-              title={saved ? 'Unsave' : 'Save job'}
+              onClick={handleBookmarkClick}
+              disabled={bookmarkLoading}
+              className={`p-1 rounded-md hover:bg-[rgb(var(--muted))] transition-colors flex-shrink-0 ${isBookmarked ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} ${bookmarkLoading ? 'cursor-wait' : ''}`}
+              title={isBookmarked ? 'Remove bookmark' : 'Bookmark job'}
             >
-              <svg className={`w-4 h-4 transition-colors ${saved ? 'fill-[rgb(var(--accent))] text-[rgb(var(--accent))]' : 'text-[rgb(var(--muted-foreground))]'}`} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} fill={saved ? 'currentColor' : 'none'}>
+              <svg className={`w-4 h-4 transition-colors ${isBookmarked ? 'fill-[rgb(var(--accent))] text-[rgb(var(--accent))]' : 'text-[rgb(var(--muted-foreground))]'}`} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} fill={isBookmarked ? 'currentColor' : 'none'}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
             </button>
@@ -99,6 +134,37 @@ export default function JobCard({ job, index = 0 }) {
             <p className="text-xs text-[rgb(var(--muted-foreground))] mt-2 line-clamp-2 leading-relaxed">
               {job.match_reason}
             </p>
+          )}
+
+          {/* Enriched details (from detail-scraper Phase 2) */}
+          {job.description && (
+            <p className="text-xs text-[rgb(var(--foreground)/_0.8)] mt-2 leading-relaxed">
+              {job.description}
+            </p>
+          )}
+          {job.requirements?.length > 0 && (
+            <div className="mt-2">
+              <span className="text-[10px] font-semibold text-[rgb(var(--muted-foreground))] uppercase tracking-wider">Requirements</span>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {job.requirements.map((req, i) => (
+                  <span key={i} className="px-1.5 py-0.5 text-[10px] rounded bg-[rgb(var(--muted))] text-[rgb(var(--muted-foreground))]">
+                    {req}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {job.benefits?.length > 0 && (
+            <div className="mt-2">
+              <span className="text-[10px] font-semibold text-[rgb(var(--muted-foreground))] uppercase tracking-wider">Benefits</span>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {job.benefits.map((b, i) => (
+                  <span key={i} className="px-1.5 py-0.5 text-[10px] rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    {b}
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Apply button */}

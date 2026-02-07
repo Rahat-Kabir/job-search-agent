@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
+from langgraph.types import Command
 from sqlalchemy.orm import Session
 
 from backend.agents.orchestrator import create_orchestrator_with_hitl
@@ -53,6 +54,11 @@ def run_search(search_id: str, profile_context: str, db_url: str):
         messages = [{"role": "user", "content": f"Find jobs for:\n{profile_context}"}]
         result = agent.invoke({"messages": messages}, config=config)
 
+        # Auto-approve any HITL interrupts (user already initiated search explicitly)
+        while "__interrupt__" in result and len(result["__interrupt__"]) > 0:
+            logger.info(f"[{search_id}] Auto-approving HITL interrupt...")
+            result = agent.invoke(Command(resume={"decisions": [{"type": "approve"}]}), config=config)
+
         # Status: Searching jobs
         _update_status(db, search_id, "searching_jobs")
         logger.info(f"[{search_id}] Searching jobs...")
@@ -60,6 +66,11 @@ def run_search(search_id: str, profile_context: str, db_url: str):
         # Step 2: Approve to trigger job search
         messages.append({"role": "user", "content": "approve"})
         result = agent.invoke({"messages": messages}, config=config)
+
+        # Auto-approve any remaining HITL interrupts
+        while "__interrupt__" in result and len(result["__interrupt__"]) > 0:
+            logger.info(f"[{search_id}] Auto-approving HITL interrupt...")
+            result = agent.invoke(Command(resume={"decisions": [{"type": "approve"}]}), config=config)
 
         # Status: Ranking results
         _update_status(db, search_id, "ranking_results")

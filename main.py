@@ -1,7 +1,7 @@
 """
 Job Search Agent - CLI Entry Point.
 
-Token-optimized CLI with state persistence.
+Token-optimized CLI with persistent state and HITL support.
 """
 
 import sys
@@ -12,8 +12,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from backend.agents.checkpointer import close_checkpointer, init_checkpointer
 from backend.agents.orchestrator import create_orchestrator_with_hitl, truncate_cv
 from backend.tools.pdf_parser import parse_pdf_from_path
+
+try:
+    from langgraph.types import Command
+except ImportError:
+    Command = None
 
 
 def main():
@@ -39,8 +45,13 @@ def main():
             print(f"Error: {cv_path} is not a valid PDF")
             return
 
-    # Create agent
+    # Initialize checkpointer
     print("\nInitializing...")
+    try:
+        init_checkpointer()
+    except ValueError:
+        print("Warning: DATABASE_URL not set — using in-memory state (no persistence)")
+
     try:
         agent, _ = create_orchestrator_with_hitl()
         print("Ready!\n")
@@ -56,9 +67,35 @@ def main():
     print("-" * 40)
 
     def chat(content: str) -> str:
-        """Send message and get response."""
+        """Send message and get response, handling HITL interrupts."""
         messages.append({"role": "user", "content": content})
         result = agent.invoke({"messages": messages}, config=config)
+
+        # Handle HITL interrupt
+        if "__interrupt__" in result and len(result["__interrupt__"]) > 0:
+            interrupt = result["__interrupt__"][0]
+            value = getattr(interrupt, "value", interrupt) if not isinstance(interrupt, dict) else interrupt
+            print(f"\n[HITL] Agent wants to call external search APIs.")
+            if isinstance(value, dict):
+                desc = value.get("description", str(value))
+                print(f"[HITL] Details: {desc}")
+
+            while True:
+                choice = input("[HITL] Approve? (y/n): ").strip().lower()
+                if choice in ("y", "yes"):
+                    approve = {"decisions": [{"type": "approve"}]}
+                    result = agent.invoke(Command(resume=approve), config=config)
+                    # Auto-approve subsequent tool calls in same search
+                    while "__interrupt__" in result and len(result["__interrupt__"]) > 0:
+                        print("[HITL] Auto-approving follow-up tool call...")
+                        result = agent.invoke(Command(resume=approve), config=config)
+                    break
+                elif choice in ("n", "no"):
+                    reject = {"decisions": [{"type": "reject"}]}
+                    result = agent.invoke(Command(resume=reject), config=config)
+                    break
+                else:
+                    print("Please enter 'y' or 'n'")
 
         response_msgs = result.get("messages", [])
         if response_msgs:
@@ -97,6 +134,7 @@ def main():
         except KeyboardInterrupt:
             break
 
+    close_checkpointer()
     print("Goodbye!")
 
 

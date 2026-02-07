@@ -22,7 +22,10 @@ frontend/dist/
 # Personal CV files
 *.pdf
 
-# Project docs
-CLAUDE.md 
-SPEC.md 
-PROGRESS.md
+# Agent data (summarization cache)
+.agent_data/
+
+# Project docs (optional - remove lines below if you want to track these)
+CLAUDE.md
+SPEC.md
+AGENT.md

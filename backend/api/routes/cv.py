@@ -48,7 +48,7 @@ async def upload_cv(
         agent, _ = create_orchestrator_with_hitl()
         config = {"configurable": {"thread_id": str(uuid.uuid4())}}
 
-        result = agent.invoke(
+        result = await agent.ainvoke(
             {"messages": [{"role": "user", "content": f"Here's my CV:\n\n{cv_text}"}]},
             config=config,
         )

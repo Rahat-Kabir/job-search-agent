@@ -124,3 +124,21 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     session: Mapped["ChatSession"] = relationship(back_populates="messages")
+
+
+class Bookmark(Base):
+    """A bookmarked job."""
+
+    __tablename__ = "bookmarks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    session_id: Mapped[str] = mapped_column(String(36), index=True)  # Anonymous bookmarks by session
+    title: Mapped[str] = mapped_column(String(255))
+    company: Mapped[str] = mapped_column(String(255))
+    match_score: Mapped[float] = mapped_column(Float, default=0.0)
+    match_reason: Mapped[str] = mapped_column(Text, default="")
+    location_type: Mapped[str] = mapped_column(String(20), default="unknown")
+    salary: Mapped[str | None] = mapped_column(String(100), default=None)
+    posting_url: Mapped[str] = mapped_column(Text)
+    description_snippet: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))

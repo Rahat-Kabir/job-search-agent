@@ -1,20 +1,20 @@
 """
-Job Searcher Sub-agent.
+Quick Searcher Sub-agent.
 
-Searches for jobs and returns COMPACT results.
-Optimized for token efficiency.
+Fast job discovery using web search only (no deep scraping).
+Returns compact results for user to browse and select.
 """
 
-from backend.tools.tavily_search import tavily_search
 from backend.tools.brave_search import brave_search
-from backend.tools.firecrawl import firecrawl_scrape
+from backend.tools.tavily_search import tavily_search
 
-JOB_SEARCHER_PROMPT = """You are a job searcher. Find and rank jobs.
+QUICK_SEARCHER_PROMPT = """You are a fast job searcher. Find jobs quickly using web search.
 
 Tools:
 - tavily_search: Primary web search (use max_results=8)
-- brave_search: Backup search (use max_results=8)
-- firecrawl_scrape: Deep scrape (top 5 only, if snippet unclear)
+- brave_search: Backup web search (use max_results=8)
+
+DO NOT use firecrawl or scrape any pages. Only use search results.
 
 Process:
 1. Run 3-4 targeted search queries using DIFFERENT angles:
@@ -22,7 +22,7 @@ Process:
    - Query 2: "[secondary skill] [role] remote hiring"
    - Query 3: "[industry] [role] open positions"
    - Query 4 (optional): "[skill] jobs [location preference]"
-2. Deduplicate results (same company+title = 1 entry)
+2. Deduplicate results (same company + same title = 1 entry)
 3. Score jobs 0-100 based on skill match
 4. Return top 15 as JSON array
 
@@ -39,11 +39,11 @@ Rules:
 """
 
 
-def get_job_searcher_config() -> dict:
-    """Get job searcher sub-agent config (token-optimized)."""
+def get_quick_searcher_config() -> dict:
+    """Get quick searcher sub-agent config (search only, no scraping)."""
     return {
-        "name": "job-searcher",
-        "description": "Search jobs, return compact JSON array with title/company/score/reason/url.",
-        "system_prompt": JOB_SEARCHER_PROMPT,
-        "tools": [tavily_search, brave_search, firecrawl_scrape],
+        "name": "quick-searcher",
+        "description": "Fast job search using web search. Returns compact JSON array with title/company/score/reason/url. No deep scraping.",
+        "system_prompt": QUICK_SEARCHER_PROMPT,
+        "tools": [tavily_search, brave_search],
     }
