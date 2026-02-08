@@ -27,5 +27,39 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: job_search_backend
+    env_file: .env
+    environment:
+      # Override localhost refs to use Docker service names
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/job_search
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGINS: http://localhost
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8020/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: job_search_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   pgdata:

@@ -30,15 +30,41 @@ Upload your CV, and the agent reads your skills, searches the web for matching j
 |-------|-------------|
 | **Backend** | FastAPI, SQLAlchemy, Pydantic, slowapi |
 | **Frontend** | React 19, Vite 7, Tailwind CSS 4, react-markdown |
-| **Infrastructure** | PostgreSQL 16, Redis 7, Docker Compose |
+| **Infrastructure** | PostgreSQL 16, Redis 7, Docker, nginx |
 | **AI / Agents** | DeepAgents, LangChain, LangGraph, DeepSeek-V3 |
 | **Search** | Tavily, Brave Search, Firecrawl |
 | **PDF** | PyPDF |
 
 ## Quickstart
 
+### Option A: Docker (recommended)
+
 ```bash
-# Prerequisites: Python 3.11+, Node.js, Docker
+# 1. Clone and configure
+git clone <repo-url>
+cd job-search-agent
+cp .env.example .env  # Edit with your API keys
+
+# 2. Build and start everything
+docker compose up --build -d
+```
+
+Open **http://localhost** -- nginx serves the frontend and proxies API calls to the backend.
+
+To restart later (no rebuild needed):
+```bash
+docker compose up -d
+```
+
+To rebuild after code changes:
+```bash
+docker compose up --build -d
+```
+
+### Option B: Local development
+
+```bash
+# Prerequisites: Python 3.11+, Node.js 22+, Docker (for Postgres/Redis)
 
 # 1. Clone and install
 git clone <repo-url>
@@ -46,20 +72,20 @@ cd job-search-agent
 uv sync
 
 # 2. Set up environment
-cp .env.example .env  # Then edit with your API keys
+cp .env.example .env  # Edit with your API keys
 
-# 3. Start services
-docker compose up -d
+# 3. Start Postgres + Redis
+docker compose up db redis -d
 
 # 4. Start backend
-uv run uvicorn backend.api:app --reload --host 127.0.0.1 --port 8020
+uv run uvicorn backend.api.app:app --reload --host 127.0.0.1 --port 8020
 
 # 5. Start frontend (new terminal)
 cd frontend && npm install && npm run dev
 ```
 
 - Backend runs at **http://127.0.0.1:8020**
-- Frontend runs at **http://localhost:5173**
+- Frontend runs at **http://localhost:5173** (proxies API to backend)
 
 ## CLI Usage
 
@@ -78,15 +104,28 @@ The agent will:
 ### System Overview
 
 ```
-┌─────────────────┐      ┌──────────────┐      ┌────────────────────┐
-│  React Frontend │ ───→ │  FastAPI API  │ ───→ │  AI Agent System   │
-│  (Vite + TW)    │ ←─── │  (REST + SSE) │ ←─── │  (DeepAgents/LG)   │
-└─────────────────┘      └──────┬───────┘      └────────┬───────────┘
-                                │                       │
-                     ┌──────────┴──────────┐   ┌───────┴────────┐
-                     │  PostgreSQL  │ Redis │   │ Tavily │ Brave │
-                     │  (data)      │(rate) │   │ Firecrawl      │
-                     └──────────────┴──────┘   └────────────────┘
+                     ┌─────────────────────┐
+  Port 80 ─────────→│  nginx (frontend)    │
+                     │  - React SPA         │
+                     │  - /api/* proxy      │
+                     │  - /chat/* SSE proxy │
+                     └────────┬────────────┘
+                              │ proxy_pass
+                     ┌────────▼────────────┐
+  Port 8020 (int) →  │  uvicorn (backend)   │
+                     │  - FastAPI REST+SSE  │
+                     │  - Agent orchestrator│
+                     └───┬────────────┬────┘
+                         │            │
+                ┌────────▼──┐  ┌─────▼─────┐
+  Port 5432 →   │ PostgreSQL │  │   Redis   │ ← Port 6379
+                │  (data)    │  │  (rate)   │
+                └────────────┘  └───────────┘
+                                       ↑
+                              ┌────────┴────────┐
+                              │ Tavily │ Brave   │
+                              │ Firecrawl        │
+                              └─────────────────┘
 ```
 
 ### Agent Hierarchy
@@ -212,13 +251,16 @@ job-search-agent/
 │   ├── utils/            # Parser, helpers
 │   └── config.py
 ├── frontend/
-│   └── src/
-│       ├── components/   # React components
-│       ├── api.js        # API client
-│       └── App.jsx
+│   ├── src/
+│   │   ├── components/   # React components
+│   │   ├── api.js        # API client
+│   │   └── App.jsx
+│   ├── Dockerfile        # Multi-stage: node build → nginx serve
+│   └── nginx.conf        # Reverse proxy + SPA fallback
 ├── scripts/              # CLI test scripts
 ├── docs/                 # Tech spec, progress tracking
-├── docker-compose.yml
+├── Dockerfile            # Multi-stage: uv build → python slim
+├── docker-compose.yml    # All 4 services: db, redis, backend, frontend
 ├── pyproject.toml
 ├── main.py               # CLI entry point
 └── .env.example

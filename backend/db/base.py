@@ -51,7 +51,9 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db():
-    """Initialize database tables."""
-    from backend.db import tables  # noqa: F401
+    """Run Alembic migrations to bring database schema up to date."""
+    from alembic import command
+    from alembic.config import Config
 
-    Base.metadata.create_all(bind=get_engine())
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")

@@ -477,6 +477,116 @@ The `parse_jobs_response()` markdown fallback incorrectly matched this as jobs (
 
 ---
 
+## Phase 14: Containerization (Docker)
+
+| Task | Status |
+|------|--------|
+| Backend Dockerfile (multi-stage: uv + python:3.12-slim) | Done |
+| Frontend Dockerfile (multi-stage: node:22-alpine + nginx:alpine) | Done |
+| Nginx reverse proxy config (API + SSE + SPA fallback) | Done |
+| Updated docker-compose.yml (4 services: db, redis, backend, frontend) | Done |
+| .dockerignore files for backend and frontend | Done |
+| Full stack test (all containers healthy, API proxied, SPA served) | Done |
+
+---
+
+### Phase 14 Architecture
+
+#### Container Stack
+```
+nginx:80 (frontend) ─── reverse proxy ──→ backend:8020 (FastAPI)
+                                              ├── db:5432 (PostgreSQL)
+                                              └── redis:6379 (Redis)
+```
+
+#### Backend Dockerfile (`Dockerfile`)
+- **Stage 1 (builder)**: `python:3.12-slim` + `uv` from `ghcr.io/astral-sh/uv:latest`
+  - `uv sync --frozen --no-dev --no-install-project` (deps only, cached layer)
+  - Copy source → `uv sync --frozen --no-dev --no-editable` (install project)
+- **Stage 2 (runtime)**: `python:3.12-slim` with only `.venv` + source
+- **Entry**: `uvicorn backend.api.app:app --host 0.0.0.0 --port 8020`
+
+#### Frontend Dockerfile (`frontend/Dockerfile`)
+- **Stage 1 (builder)**: `node:22-alpine`, `npm ci --force` (cross-platform), `npm run build`
+- **Stage 2 (serve)**: `nginx:alpine` with custom `nginx.conf`
+- **Note**: `--force` needed because `package-lock.json` has Windows-specific optional deps
+
+#### Nginx Config (`frontend/nginx.conf`)
+- `/api/*` → `http://backend:8020/` (strip `/api` prefix, matching Vite dev proxy)
+- `/chat/*` → `http://backend:8020/chat/` (SSE: `proxy_buffering off`, 300s timeout)
+- `/health` → `http://backend:8020/health`
+- `/assets/*` → static files (1y cache, immutable)
+- `/*` → `try_files $uri /index.html` (SPA fallback)
+
+#### Docker Compose Services
+| Service | Image | Port | Depends On |
+|---------|-------|------|------------|
+| `db` | `postgres:16-alpine` | 5432 (host) | — |
+| `redis` | `redis:7-alpine` | 6379 (host) | — |
+| `backend` | built from `./Dockerfile` | 8020 (internal) | db, redis (healthy) |
+| `frontend` | built from `./frontend/Dockerfile` | 80 (host) | backend (healthy) |
+
+#### Environment Override
+- `DATABASE_URL` overridden to `postgresql+psycopg://postgres:postgres@db:5432/job_search` (service name)
+- `REDIS_URL` overridden to `redis://redis:6379`
+- `CORS_ORIGINS` set to `http://localhost` (nginx port 80)
+- API keys loaded from `.env` via `env_file`
+
+#### Commands
+```bash
+docker compose up --build        # Build + start all 4 services
+docker compose up -d             # Start in background
+docker compose build backend     # Rebuild backend only
+docker compose build frontend    # Rebuild frontend only
+docker compose logs backend -f   # Tail backend logs
+```
+
+---
+
+## Phase 15: Database Migrations (Alembic)
+
+| Task | Status |
+|------|--------|
+| Initialize Alembic (`alembic init backend/alembic`) | Done |
+| Configure `env.py` with existing Base metadata + DATABASE_URL | Done |
+| Exclude PostgresSaver checkpoint tables from autogenerate | Done |
+| Generate baseline migration (empty — tables already exist) | Done |
+| Stamp DB as current (`alembic stamp head`) | Done |
+| Replace `Base.metadata.create_all()` with `alembic upgrade head` on startup | Done |
+| CLI test: `scripts/test_migrations.py` | Done |
+
+---
+
+### Phase 15 Details
+
+#### Problem
+- `Base.metadata.create_all()` has no versioning, no rollback, no schema drift detection
+- 8 custom tables already exist but schema changes would require manual SQL or recreating tables
+
+#### Solution
+- Alembic autogenerate from SQLAlchemy models
+- Auto-runs `alembic upgrade head` on FastAPI startup
+- Checkpoint tables excluded via `include_object` filter in `env.py`
+- Baseline migration stamped (no-op since tables already exist in DB)
+
+#### Workflow for Future Schema Changes
+```bash
+# 1. Modify model in backend/db/tables.py
+# 2. Generate migration
+uv run alembic revision --autogenerate -m "add_column_x_to_users"
+# 3. Review generated file in backend/alembic/versions/
+# 4. App auto-applies on next startup
+```
+
+#### Files Changed
+- `alembic.ini` — Alembic config (URL set programmatically)
+- `backend/alembic/env.py` — Configured with Base metadata, checkpoint table exclusion
+- `backend/alembic/versions/` — Migration files
+- `backend/db/base.py` — `init_db()` now runs `alembic upgrade head` instead of `create_all()`
+- `scripts/test_migrations.py` — Migration pipeline test
+
+---
+
 ## Known Issue
 **Token usage** still elevated due to Deep Agents sub-agent architecture.
 

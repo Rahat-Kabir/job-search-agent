@@ -159,8 +159,20 @@ SEARCH_TOOL_INTERRUPT = {
 - `chat_sessions` — Chat sessions (with `thread_id` for agent state)
 - `chat_messages` — Individual messages (with `message_type` and `extra_data`)
 
+### Database Migrations (Alembic)
+- **Tool**: Alembic (autogenerate from SQLAlchemy models)
+- **Config**: `alembic.ini` + `backend/alembic/env.py`
+- **Migrations dir**: `backend/alembic/versions/`
+- **Auto-run**: `alembic upgrade head` runs on FastAPI startup (replaces `Base.metadata.create_all()`)
+- **Excluded tables**: Checkpoint tables (`checkpoints`, `checkpoint_blobs`, `checkpoint_writes`, `checkpoint_migrations`) are managed by PostgresSaver and excluded from autogenerate
+- **Usage**:
+  - Add/modify model in `backend/db/tables.py`
+  - `uv run alembic revision --autogenerate -m "description"`
+  - Review generated migration in `backend/alembic/versions/`
+  - App auto-applies on next startup (or manually: `uv run alembic upgrade head`)
+
 ### Checkpoint Tables (LangGraph)
-Created automatically by `PostgresSaver.setup()`:
+Created automatically by `PostgresSaver.setup()` (excluded from Alembic):
 - `checkpoints` — Graph state snapshots
 - `checkpoint_blobs` — Serialized state data
 - `checkpoint_writes` — Pending writes
@@ -185,6 +197,58 @@ Created automatically by `PostgresSaver.setup()`:
   - "Yes, upload my CV" (accent color, upload icon) → triggers file input
   - "No, I'll describe my skills" (outline, edit icon) → sends prompt message
 - Buttons disappear after user choice (message type changed to `text`)
+
+---
+
+## Containerization
+
+### Docker Architecture
+```
+                    ┌─────────────────────┐
+  Port 80 ────────→│  nginx (frontend)    │
+                    │  - Static SPA        │
+                    │  - /api/* proxy      │
+                    │  - /chat/* SSE proxy │
+                    └────────┬────────────┘
+                             │ proxy_pass
+                    ┌────────▼────────────┐
+  Port 8020 (int) →│  uvicorn (backend)   │
+                    │  - FastAPI app       │
+                    │  - Agent orchestrator│
+                    └───┬────────────┬────┘
+                        │            │
+               ┌────────▼──┐  ┌─────▼─────┐
+  Port 5432 →  │ PostgreSQL │  │   Redis   │ ← Port 6379
+               └───────────┘  └───────────┘
+```
+
+### Dockerfiles
+- **Backend** (`Dockerfile`): Multi-stage — `python:3.12-slim` + `uv` for deps, slim runtime with `.venv` only
+- **Frontend** (`frontend/Dockerfile`): Multi-stage — `node:22-alpine` for build, `nginx:alpine` for serving
+
+### Nginx Proxy Rules (`frontend/nginx.conf`)
+| Path | Target | Notes |
+|------|--------|-------|
+| `/api/*` | `http://backend:8020/` | Strips `/api` prefix |
+| `/chat/*` | `http://backend:8020/chat/` | SSE: `proxy_buffering off`, 300s timeout |
+| `/health` | `http://backend:8020/health` | Direct proxy |
+| `/assets/*` | Local static | 1y cache, immutable |
+| `/*` | `index.html` | SPA fallback |
+
+### Docker Compose Services
+| Service | Image | Exposed Port | Health Check |
+|---------|-------|-------------|--------------|
+| `db` | `postgres:16-alpine` | 5432 | `pg_isready` |
+| `redis` | `redis:7-alpine` | 6379 | `redis-cli ping` |
+| `backend` | `./Dockerfile` | 8020 (internal) | `/health` endpoint |
+| `frontend` | `./frontend/Dockerfile` | 80 | — |
+
+### Environment in Docker
+- `env_file: .env` loads API keys
+- `DATABASE_URL`, `REDIS_URL` overridden to use Docker service names (`db`, `redis`)
+- `CORS_ORIGINS=http://localhost` (nginx on port 80)
+
+---
 
 ### Message Types
 | Type | Purpose |
