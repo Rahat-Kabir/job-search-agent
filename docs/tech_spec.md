@@ -122,6 +122,14 @@ SEARCH_TOOL_INTERRUPT = {
 | `/chat/{session_id}` | GET | Get chat history |
 | `/chat/{session_id}` | DELETE | Delete session, messages, and in-memory agent |
 
+### Access Control
+All chat and bookmark endpoints accept an optional `X-User-ID` header:
+- **Anonymous sessions** (before CV upload, `user_id` is NULL): accessible by session_id knowledge alone
+- **Owned sessions** (after CV upload sets `user_id`): require matching `X-User-ID` header
+- **GET /sessions**: Filters by `X-User-ID` — shows user's own sessions + anonymous ones
+- **Bookmarks**: Ownership verified transitively through the session's `user_id`
+- Search, profile, preferences endpoints require `X-User-ID` (mandatory, existing pattern)
+
 ### SSE Events
 | Event | Description |
 |-------|-------------|

@@ -1,5 +1,25 @@
 const API_BASE = '/api';
 
+async function readErrorMessage(res, fallbackMessage) {
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    try {
+      const error = await res.json();
+      return error.detail || error.message || fallbackMessage;
+    } catch {
+      return fallbackMessage;
+    }
+  }
+
+  try {
+    const text = (await res.text()).trim();
+    if (!text) return fallbackMessage;
+    return text.slice(0, 300);
+  } catch {
+    return fallbackMessage;
+  }
+}
+
 export async function uploadCV(file) {
   const formData = new FormData();
   formData.append('file', file);
@@ -10,8 +30,8 @@ export async function uploadCV(file) {
   });
 
   if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || 'Failed to upload CV');
+    const msg = await readErrorMessage(res, 'Failed to upload CV');
+    throw new Error(msg);
   }
 
   return res.json();
@@ -87,11 +107,19 @@ export async function getSearchResults(userId, searchId) {
   return res.json();
 }
 
+// Helper to build headers with optional auth
+function _authHeaders(userId, contentType = null) {
+  const headers = {};
+  if (contentType) headers['Content-Type'] = contentType;
+  if (userId) headers['X-User-ID'] = userId;
+  return headers;
+}
+
 // Chat API
-export async function sendMessage(message, sessionId = null) {
+export async function sendMessage(message, sessionId = null, userId = null) {
   const res = await fetch(`${API_BASE}/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: _authHeaders(userId, 'application/json'),
     body: JSON.stringify({ message, session_id: sessionId }),
   });
 
@@ -103,7 +131,7 @@ export async function sendMessage(message, sessionId = null) {
   return res.json();
 }
 
-export async function uploadCVChat(file, sessionId = null) {
+export async function uploadCVChat(file, sessionId = null, userId = null) {
   const formData = new FormData();
   formData.append('file', file);
   if (sessionId) {
@@ -112,19 +140,22 @@ export async function uploadCVChat(file, sessionId = null) {
 
   const res = await fetch(`${API_BASE}/chat/upload`, {
     method: 'POST',
+    headers: _authHeaders(userId),
     body: formData,
   });
 
   if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || 'Failed to upload CV');
+    const msg = await readErrorMessage(res, 'Failed to upload CV');
+    throw new Error(msg);
   }
 
   return res.json();
 }
 
-export async function getChatHistory(sessionId) {
-  const res = await fetch(`${API_BASE}/chat/${sessionId}`);
+export async function getChatHistory(sessionId, userId = null) {
+  const res = await fetch(`${API_BASE}/chat/${sessionId}`, {
+    headers: _authHeaders(userId),
+  });
 
   if (!res.ok) {
     throw new Error('Failed to fetch chat history');
@@ -133,8 +164,10 @@ export async function getChatHistory(sessionId) {
   return res.json();
 }
 
-export async function listSessions() {
-  const res = await fetch(`${API_BASE}/chat/sessions`);
+export async function listSessions(userId = null) {
+  const res = await fetch(`${API_BASE}/chat/sessions`, {
+    headers: _authHeaders(userId),
+  });
 
   if (!res.ok) {
     throw new Error('Failed to fetch sessions');
@@ -143,9 +176,10 @@ export async function listSessions() {
   return res.json();
 }
 
-export async function deleteSession(sessionId) {
+export async function deleteSession(sessionId, userId = null) {
   const res = await fetch(`${API_BASE}/chat/${sessionId}`, {
     method: 'DELETE',
+    headers: _authHeaders(userId),
   });
 
   if (!res.ok) {
@@ -156,17 +190,17 @@ export async function deleteSession(sessionId) {
 }
 
 // HITL Confirmation (SSE streaming)
-export async function confirmAction(sessionId, approved, onStatus, onComplete, onError) {
+export async function confirmAction(sessionId, approved, onStatus, onComplete, onError, userId = null) {
   try {
     const response = await fetch(`${API_BASE}/chat/confirm`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: _authHeaders(userId, 'application/json'),
       body: JSON.stringify({ session_id: sessionId, approved }),
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to confirm action');
+      const msg = await readErrorMessage(response, 'Failed to confirm action');
+      throw new Error(msg);
     }
 
     const reader = response.body.getReader();
@@ -209,17 +243,17 @@ export async function confirmAction(sessionId, approved, onStatus, onComplete, o
 }
 
 // Get Job Details (Phase 2 - SSE streaming)
-export async function getJobDetails(sessionId, selectedUrls, onStatus, onComplete, onError) {
+export async function getJobDetails(sessionId, selectedUrls, onStatus, onComplete, onError, userId = null) {
   try {
     const response = await fetch(`${API_BASE}/chat/get-details`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: _authHeaders(userId, 'application/json'),
       body: JSON.stringify({ session_id: sessionId, selected_urls: selectedUrls }),
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to get job details');
+      const msg = await readErrorMessage(response, 'Failed to get job details');
+      throw new Error(msg);
     }
 
     const reader = response.body.getReader();
@@ -262,17 +296,17 @@ export async function getJobDetails(sessionId, selectedUrls, onStatus, onComplet
 }
 
 // SSE Streaming Chat API
-export async function sendMessageStream(message, sessionId, onStatus, onComplete, onError, onConfirmation) {
+export async function sendMessageStream(message, sessionId, onStatus, onComplete, onError, onConfirmation, userId = null) {
   try {
     const response = await fetch(`${API_BASE}/chat/stream`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: _authHeaders(userId, 'application/json'),
       body: JSON.stringify({ message, session_id: sessionId }),
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to send message');
+      const msg = await readErrorMessage(response, 'Failed to send message');
+      throw new Error(msg);
     }
 
     const reader = response.body.getReader();
@@ -316,49 +350,53 @@ export async function sendMessageStream(message, sessionId, onStatus, onComplete
 }
 
 // Bookmark API
-export async function createBookmark(bookmark) {
+export async function createBookmark(bookmark, userId = null) {
   const res = await fetch(`${API_BASE}/bookmarks`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: _authHeaders(userId, 'application/json'),
     body: JSON.stringify(bookmark),
   });
 
   if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || 'Failed to create bookmark');
+    const msg = await readErrorMessage(res, 'Failed to create bookmark');
+    throw new Error(msg);
   }
 
   return res.json();
 }
 
-export async function deleteBookmark(bookmarkId) {
+export async function deleteBookmark(bookmarkId, userId = null) {
   const res = await fetch(`${API_BASE}/bookmarks/${bookmarkId}`, {
     method: 'DELETE',
+    headers: _authHeaders(userId),
   });
 
   if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || 'Failed to delete bookmark');
+    const msg = await readErrorMessage(res, 'Failed to delete bookmark');
+    throw new Error(msg);
   }
 
   return res.json();
 }
 
-export async function deleteBookmarkByUrl(sessionId, postingUrl) {
+export async function deleteBookmarkByUrl(sessionId, postingUrl, userId = null) {
   const res = await fetch(`${API_BASE}/bookmarks/url/${sessionId}?posting_url=${encodeURIComponent(postingUrl)}`, {
     method: 'DELETE',
+    headers: _authHeaders(userId),
   });
 
   if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || 'Failed to delete bookmark');
+    const msg = await readErrorMessage(res, 'Failed to delete bookmark');
+    throw new Error(msg);
   }
 
   return res.json();
 }
 
-export async function listBookmarks(sessionId) {
-  const res = await fetch(`${API_BASE}/bookmarks?session_id=${sessionId}`);
+export async function listBookmarks(sessionId, userId = null) {
+  const res = await fetch(`${API_BASE}/bookmarks?session_id=${sessionId}`, {
+    headers: _authHeaders(userId),
+  });
 
   if (!res.ok) {
     throw new Error('Failed to fetch bookmarks');
@@ -367,8 +405,10 @@ export async function listBookmarks(sessionId) {
   return res.json();
 }
 
-export async function checkBookmark(sessionId, postingUrl) {
-  const res = await fetch(`${API_BASE}/bookmarks/check?session_id=${sessionId}&posting_url=${encodeURIComponent(postingUrl)}`);
+export async function checkBookmark(sessionId, postingUrl, userId = null) {
+  const res = await fetch(`${API_BASE}/bookmarks/check?session_id=${sessionId}&posting_url=${encodeURIComponent(postingUrl)}`, {
+    headers: _authHeaders(userId),
+  });
 
   if (!res.ok) {
     throw new Error('Failed to check bookmark');

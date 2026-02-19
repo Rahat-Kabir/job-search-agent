@@ -4,6 +4,7 @@ Job Search Agent - CLI Entry Point.
 Token-optimized CLI with persistent state and HITL support.
 """
 
+import asyncio
 import sys
 import uuid
 from pathlib import Path
@@ -48,7 +49,7 @@ def main():
     # Initialize checkpointer
     print("\nInitializing...")
     try:
-        init_checkpointer()
+        asyncio.run(init_checkpointer())
     except ValueError:
         print("Warning: DATABASE_URL not set — using in-memory state (no persistence)")
 
@@ -134,7 +135,7 @@ def main():
         except KeyboardInterrupt:
             break
 
-    close_checkpointer()
+    asyncio.run(close_checkpointer())
     print("Goodbye!")
 
 

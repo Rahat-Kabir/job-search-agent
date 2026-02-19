@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import AsyncGenerator
 
 from cachetools import TTLCache
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from langgraph.types import Command
 from sqlalchemy.orm import Session
@@ -26,6 +26,20 @@ from backend.utils.parser import parse_job_details_response, parse_jobs_response
 MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5 MB
 
 router = APIRouter()
+
+
+def _verify_session_access(session: ChatSession, x_user_id: str | None):
+    """Verify the caller has access to this session.
+
+    Rules:
+    - If session has no user_id (anonymous): allow access (pre-CV-upload state)
+    - If session has user_id: require matching X-User-ID header
+    """
+    if session.user_id is not None:
+        if not x_user_id:
+            raise HTTPException(status_code=403, detail="Authentication required for this session")
+        if session.user_id != x_user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
 
 # In-memory agent sessions (thread_id -> agent instance)
 # Bounded TTL cache: max 200 agents, evict after 1 hour of inactivity.
@@ -129,6 +143,7 @@ async def chat_stream(
     request: Request,
     data: ChatMessageRequest,
     db: Session = Depends(get_db),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Stream chat response via SSE with real-time agent events."""
     # Get or create session
@@ -137,6 +152,8 @@ async def chat_stream(
         if not session:
             session = ChatSession(id=data.session_id)
             db.add(session)
+        else:
+            _verify_session_access(session, x_user_id)
     else:
         session = ChatSession()
         db.add(session)
@@ -291,6 +308,7 @@ async def confirm_action(
     request: Request,
     data: dict,
     db: Session = Depends(get_db),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Confirm or reject a pending HITL action. Streams real-time events via SSE."""
     session_id = data.get("session_id")
@@ -302,6 +320,8 @@ async def confirm_action(
     session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    _verify_session_access(session, x_user_id)
 
     thread_id = session.thread_id
 
@@ -426,6 +446,7 @@ async def get_job_details(
     request: Request,
     data: dict,
     db: Session = Depends(get_db),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get detailed info for selected jobs. Streams real-time events via SSE."""
     session_id = data.get("session_id")
@@ -439,6 +460,8 @@ async def get_job_details(
     session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    _verify_session_access(session, x_user_id)
 
     thread_id = session.thread_id
 
@@ -576,6 +599,7 @@ async def chat(
     request: Request,
     data: ChatMessageRequest,
     db: Session = Depends(get_db),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Send a message and get a response."""
     # Get or create session
@@ -584,6 +608,8 @@ async def chat(
         if not session:
             session = ChatSession(id=data.session_id)
             db.add(session)
+        else:
+            _verify_session_access(session, x_user_id)
     else:
         session = ChatSession()
         db.add(session)
@@ -688,6 +714,7 @@ async def chat_with_cv(
     request: Request,
     file: UploadFile = File(...),
     session_id: str | None = Form(None),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
     db: Session = Depends(get_db),
 ):
     """Upload CV and start chat."""
@@ -715,7 +742,7 @@ async def chat_with_cv(
                 role="assistant",
                 content="Please upload a PDF file.",
                 message_type="text",
-                metadata={},
+                extra_data={},
                 created_at=error_msg.created_at,
             )],
         )
@@ -735,6 +762,8 @@ async def chat_with_cv(
         if not session:
             session = ChatSession(id=session_id)
             db.add(session)
+        else:
+            _verify_session_access(session, x_user_id)
     else:
         session = ChatSession()
         db.add(session)
@@ -830,14 +859,18 @@ async def chat_with_cv(
 @router.get("/sessions", response_model=ChatSessionListResponse)
 async def list_sessions(
     db: Session = Depends(get_db),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
-    """List all chat sessions with title and preview derived from first user message."""
+    """List chat sessions owned by the current authenticated user only."""
+    if not x_user_id:
+        return ChatSessionListResponse(sessions=[])
+
     sessions = (
         db.query(ChatSession)
+        .filter(ChatSession.user_id == x_user_id)
         .order_by(ChatSession.updated_at.desc())
         .all()
     )
-
     result = []
     for s in sessions:
         first_user_msg = (
@@ -862,11 +895,14 @@ async def list_sessions(
 async def delete_session(
     session_id: str,
     db: Session = Depends(get_db),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Delete a chat session and all its messages. Also cleans up in-memory agent."""
     session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    _verify_session_access(session, x_user_id)
 
     # Clean up in-memory agent
     thread_id = session.thread_id
@@ -885,11 +921,14 @@ async def delete_session(
 async def get_chat_history(
     session_id: str,
     db: Session = Depends(get_db),
+    x_user_id: str | None = Header(None, alias="X-User-ID"),
 ):
     """Get chat history for a session."""
     session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
     if not session:
         return ChatResponse(session_id=session_id, user_id=None, messages=[])
+
+    _verify_session_access(session, x_user_id)
 
     messages = db.query(ChatMessage).filter(
         ChatMessage.session_id == session_id
@@ -909,3 +948,4 @@ async def get_chat_history(
             for m in messages
         ],
     )
+

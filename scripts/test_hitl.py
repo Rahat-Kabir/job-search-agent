@@ -12,8 +12,9 @@ Tests:
 5. State persists across invocations via thread_id
 """
 
-import uuid
+import asyncio
 import sys
+import uuid
 
 from dotenv import load_dotenv
 
@@ -34,7 +35,7 @@ def test_checkpointer_init():
         return False
 
     try:
-        cp = init_checkpointer()
+        cp = asyncio.run(init_checkpointer())
         print(f"OK: Checkpointer initialized: {type(cp).__name__}")
 
         # Verify we can get it again (singleton)
@@ -221,7 +222,7 @@ def main():
         status = "PASS" if passed else ("SKIP" if passed is None else "FAIL")
         print(f"  {name}: {status}")
 
-    close_checkpointer()
+    asyncio.run(close_checkpointer())
 
     failed = [k for k, v in results.items() if v is False]
     if failed:

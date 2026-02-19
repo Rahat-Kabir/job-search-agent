@@ -587,6 +587,47 @@ uv run alembic revision --autogenerate -m "add_column_x_to_users"
 
 ---
 
+## Phase 16: Access Control & Bug Fixes
+
+| Task | Status |
+|------|--------|
+| Add X-User-ID auth checks to chat.py (8 endpoints) | Done |
+| Add X-User-ID auth checks to bookmarks.py (5 endpoints) | Done |
+| Frontend: track userId, send X-User-ID header in all API calls | Done |
+| Fix Alembic initial migration (empty → actual CREATE TABLE) | Done |
+| Fix `metadata={}` → `extra_data={}` in chat.py upload error path | Done |
+| Fix async checkpointer calls in main.py and test_hitl.py | Done |
+
+---
+
+### Phase 16 Details
+
+#### Access Control
+- **Problem**: 13 endpoints (all of chat.py + bookmarks.py) had zero user ownership checks. Any user could read/delete/hijack any session by guessing UUIDs.
+- **Solution**: Added `_verify_session_access()` helper that enforces ownership when a session has a `user_id` set. Anonymous sessions (pre-CV-upload) remain accessible by session_id.
+- **Frontend**: Added `userId` state to Chat.jsx, persisted to localStorage, passed as `X-User-ID` header in all API calls via `_authHeaders()` helper in api.js.
+- **GET /sessions** now filters by user_id (shows own sessions + anonymous ones).
+
+#### Migration Baseline Fix
+- **Problem**: Initial migration (`c8d44668e193`) had empty `upgrade()` — just `pass`. Fresh deploys would get an empty database.
+- **Solution**: Replaced with actual `op.create_table()` calls for all 8 app tables with correct columns, FKs, and indexes.
+
+#### Runtime Bug Fixes
+- `chat.py:718` used `metadata={}` (Pydantic reserved word) instead of `extra_data={}` — fixed.
+- `main.py` and `test_hitl.py` called async `init_checkpointer()`/`close_checkpointer()` from sync functions without await — wrapped in `asyncio.run()`.
+
+#### Files Changed
+- `backend/api/routes/chat.py` — Auth checks on all 8 endpoints + metadata fix
+- `backend/api/routes/bookmarks.py` — Auth checks on all 5 endpoints
+- `frontend/src/api.js` — `_authHeaders()` helper, userId param on all chat/bookmark functions
+- `frontend/src/components/Chat.jsx` — userId state tracking + passing
+- `frontend/src/components/Sidebar.jsx` — Accepts and passes userId
+- `backend/alembic/versions/c8d44668e193_initial_schema.py` — Full table creation
+- `main.py` — `asyncio.run()` for checkpointer init/close
+- `scripts/test_hitl.py` — `asyncio.run()` for checkpointer init/close
+
+---
+
 ## Known Issue
 **Token usage** still elevated due to Deep Agents sub-agent architecture.
 

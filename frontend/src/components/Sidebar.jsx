@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import * as api from '../api';
 import JobCard from './JobCard';
 
-export default function Sidebar({ currentSessionId, onSelectSession, onNewChat, isOpen, onClose, bookmarks = [], onRemoveBookmark }) {
+export default function Sidebar({ currentSessionId, onSelectSession, onNewChat, isOpen, onClose, bookmarks = [], onRemoveBookmark, userId = null }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' or 'bookmarks'
@@ -10,7 +10,7 @@ export default function Sidebar({ currentSessionId, onSelectSession, onNewChat, 
   const loadSessions = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.listSessions();
+      const data = await api.listSessions(userId);
       setSessions(data.sessions || []);
     } catch (err) {
       console.error('Failed to load sessions:', err);
@@ -41,7 +41,7 @@ export default function Sidebar({ currentSessionId, onSelectSession, onNewChat, 
   const handleDelete = async (e, sessionId) => {
     e.stopPropagation();
     try {
-      await api.deleteSession(sessionId);
+      await api.deleteSession(sessionId, userId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       if (currentSessionId === sessionId) {
         onNewChat();

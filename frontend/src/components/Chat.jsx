@@ -14,6 +14,7 @@ const WELCOME_MESSAGE = {
 
 export default function Chat() {
   const [sessionId, setSessionId] = useState(() => localStorage.getItem('chatSessionId'));
+  const [userId, setUserId] = useState(() => localStorage.getItem('chatUserId'));
   const [messages, setMessages] = useState([WELCOME_MESSAGE]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -35,6 +36,14 @@ export default function Chat() {
     return new Set(bookmarks.map(b => b.posting_url));
   }, [bookmarks]);
 
+  // Persist userId when received from backend
+  const trackUserId = (uid) => {
+    if (uid && !userId) {
+      setUserId(uid);
+      localStorage.setItem('chatUserId', uid);
+    }
+  };
+
   // Load bookmarks when session changes
   const loadBookmarks = async (sid) => {
     if (!sid) {
@@ -42,7 +51,7 @@ export default function Chat() {
       return;
     }
     try {
-      const data = await api.listBookmarks(sid);
+      const data = await api.listBookmarks(sid, userId);
       setBookmarks(data.bookmarks || []);
     } catch (err) {
       console.error('Failed to load bookmarks:', err);
@@ -63,7 +72,7 @@ export default function Chat() {
         salary: job.salary || null,
         posting_url: job.posting_url || job.url,
         description_snippet: job.description_snippet || '',
-      });
+      }, userId);
       setBookmarks(prev => [bookmark, ...prev]);
     } catch (err) {
       console.error('Failed to bookmark job:', err);
@@ -74,7 +83,7 @@ export default function Chat() {
     if (!sessionId) return;
     const url = job.posting_url || job.url;
     try {
-      await api.deleteBookmarkByUrl(sessionId, url);
+      await api.deleteBookmarkByUrl(sessionId, url, userId);
       setBookmarks(prev => prev.filter(b => b.posting_url !== url));
     } catch (err) {
       console.error('Failed to remove bookmark:', err);
@@ -107,10 +116,11 @@ export default function Chat() {
 
   const loadHistory = async () => {
     try {
-      const data = await api.getChatHistory(sessionId);
+      const data = await api.getChatHistory(sessionId, userId);
       if (data.messages.length > 0) {
         setMessages(data.messages);
       }
+      if (data.user_id) trackUserId(data.user_id);
     } catch (err) {
       console.error('Failed to load history:', err);
       localStorage.removeItem('chatSessionId');
@@ -144,6 +154,7 @@ export default function Chat() {
             setSessionId(result.session_id);
             localStorage.setItem('chatSessionId', result.session_id);
           }
+          if (result.user_id) trackUserId(result.user_id);
           setMessages((prev) => [...prev, result.message]);
           setIsLoading(false);
           setStreamingStatus(null);
@@ -160,10 +171,12 @@ export default function Chat() {
             setSessionId(result.session_id);
             localStorage.setItem('chatSessionId', result.session_id);
           }
+          if (result.user_id) trackUserId(result.user_id);
           setMessages((prev) => [...prev, result.message]);
           setIsLoading(false);
           setStreamingStatus(null);
-        }
+        },
+        userId
       );
     } catch (err) {
       setError(err.message);
@@ -195,6 +208,7 @@ export default function Chat() {
           setStreamingStatus(status.message);
         },
         (result) => {
+          if (result.user_id) trackUserId(result.user_id);
           setMessages((prev) => [...prev, result.message]);
           setIsLoading(false);
           setStreamingStatus(null);
@@ -203,7 +217,8 @@ export default function Chat() {
           setError(error.message);
           setIsLoading(false);
           setStreamingStatus(null);
-        }
+        },
+        userId
       );
     } catch (err) {
       setError(err.message);
@@ -225,6 +240,7 @@ export default function Chat() {
           setStreamingStatus(status.message);
         },
         (result) => {
+          if (result.user_id) trackUserId(result.user_id);
           setMessages((prev) => [...prev, result.message]);
           setIsLoading(false);
           setStreamingStatus(null);
@@ -233,7 +249,8 @@ export default function Chat() {
           setError(error.message);
           setIsLoading(false);
           setStreamingStatus(null);
-        }
+        },
+        userId
       );
     } catch (err) {
       setError(err.message);
@@ -256,12 +273,13 @@ export default function Chat() {
     setMessages((prev) => [...prev, userMsg]);
 
     try {
-      const data = await api.uploadCVChat(file, sessionId);
+      const data = await api.uploadCVChat(file, sessionId, userId);
 
       if (!sessionId && data.session_id) {
         setSessionId(data.session_id);
         localStorage.setItem('chatSessionId', data.session_id);
       }
+      if (data.user_id) trackUserId(data.user_id);
 
       setMessages(data.messages);
     } catch (err) {
@@ -274,7 +292,9 @@ export default function Chat() {
 
   const handleNewChat = () => {
     localStorage.removeItem('chatSessionId');
+    localStorage.removeItem('chatUserId');
     setSessionId(null);
+    setUserId(null);
     setMessages([WELCOME_MESSAGE]);
     setBookmarks([]);
     setError(null);
@@ -319,10 +339,11 @@ export default function Chat() {
     localStorage.setItem('chatSessionId', sid);
     setError(null);
     try {
-      const data = await api.getChatHistory(sid);
+      const data = await api.getChatHistory(sid, userId);
       if (data.messages.length > 0) {
         setMessages(data.messages);
       }
+      if (data.user_id) trackUserId(data.user_id);
       loadBookmarks(sid);
     } catch (err) {
       console.error('Failed to load session:', err);
@@ -342,6 +363,7 @@ export default function Chat() {
         onClose={() => setSidebarOpen(false)}
         bookmarks={bookmarks}
         onRemoveBookmark={handleUnbookmark}
+        userId={userId}
       />
 
       {/* Main Chat Area */}

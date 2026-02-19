@@ -28,6 +28,7 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/backend backend/
 COPY --from=builder /app/main.py ./
+COPY alembic.ini ./
 
 # Use the venv Python
 ENV PATH="/app/.venv/bin:$PATH"
