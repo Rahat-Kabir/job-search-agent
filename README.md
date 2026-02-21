@@ -11,7 +11,7 @@
 
 Upload your CV, and the agent reads your skills, searches the web for matching jobs, and ranks them by how well they fit your profile -- all through a simple chat interface. Built on [LangChain DeepAgent](https://docs.langchain.com/oss/python/deepagents/overview), a framework that lets an AI orchestrator delegate tasks to specialized sub-agents, each with their own tools.
 
-> **Demo coming soon** -- screenshot/GIF placeholder
+![Job Search Agent — Home](img/job-search-agent-ss.png)
 
 ## Key Features
 
@@ -102,6 +102,8 @@ The agent will:
 ## Architecture
 
 ### System Overview
+
+![Architecture](img/architecture.png)
 
 ```
                      ┌─────────────────────┐
