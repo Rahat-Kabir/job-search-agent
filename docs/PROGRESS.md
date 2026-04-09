@@ -628,6 +628,40 @@ uv run alembic revision --autogenerate -m "add_column_x_to_users"
 
 ---
 
+## Phase 17: CI/CD + Test Suite
+
+| Task | Status |
+|------|--------|
+| GitHub Actions lint workflow (ruff check + ruff format) | Done |
+| Python matrix: 3.11, 3.13 | Done |
+| Unit tests: `tests/test_parser.py` (JSON extraction, profile normalization, location) | Done |
+| Integration test: `tests/test_health.py` (FastAPI health endpoint) | Done |
+| All tests passing locally (`uv run python -m pytest tests/ -v`) | Done |
+
+---
+
+### Phase 17 Details
+
+#### CI Workflow (`.github/workflows/lint.yml`)
+- **Triggers**: Push to `main` + all PRs
+- **Matrix**: Python 3.11 + 3.13
+- **Steps**: `ruff check .` + `ruff format --check .`
+- **Scope**: Lint only (no tests in CI — avoids needing DB/API keys)
+
+#### Test Suite (`tests/`)
+- `test_parser.py` — 8 tests covering `extract_json()`, `parse_profile_response()`, `_normalize_location()`
+- `test_health.py` — 1 test: FastAPI `/health` returns 200 (mocks DB + checkpointer)
+- Targets pure functions with no external deps for fast, reliable tests
+- Run: `uv run python -m pytest tests/ -v`
+
+#### Files Created
+- `.github/workflows/lint.yml`
+- `tests/__init__.py`
+- `tests/test_parser.py`
+- `tests/test_health.py`
+
+---
+
 ## Known Issue
 **Token usage** still elevated due to Deep Agents sub-agent architecture.
 

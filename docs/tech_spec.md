@@ -258,6 +258,26 @@ Created automatically by `PostgresSaver.setup()` (excluded from Alembic):
 
 ---
 
+---
+
+## CI/CD
+
+### GitHub Actions (`.github/workflows/lint.yml`)
+- **Triggers**: `push` to `main`, `pull_request` to `main`
+- **Matrix**: Python 3.11, 3.13
+- **Checks**: `ruff check .` + `ruff format --check .`
+- **No tests in CI**: Avoids needing PostgreSQL, Redis, or API keys in the runner
+
+### Testing (`tests/`)
+- **Framework**: pytest
+- **Run**: `uv run python -m pytest tests/ -v`
+- **Test files**:
+  - `test_parser.py` — Unit tests for `backend/utils/parser.py` (JSON extraction, profile parsing, location normalization)
+  - `test_health.py` — Integration test for `/health` endpoint (mocks DB + agent deps)
+- **Design**: Tests target pure functions with no external dependencies for fast, reliable CI
+
+---
+
 ### Message Types
 | Type | Purpose |
 |------|---------|
