@@ -38,7 +38,9 @@ def create_bookmark(
     # Check if already bookmarked (same session + url)
     existing = (
         db.query(Bookmark)
-        .filter(Bookmark.session_id == bookmark.session_id, Bookmark.posting_url == bookmark.posting_url)
+        .filter(
+            Bookmark.session_id == bookmark.session_id, Bookmark.posting_url == bookmark.posting_url
+        )
         .first()
     )
     if existing:

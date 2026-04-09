@@ -21,7 +21,11 @@ from backend.api.schemas import (
 )
 from backend.db import ChatMessage, ChatSession, Preferences, Profile, User, get_db
 from backend.tools.pdf_parser import parse_pdf as parse_pdf_tool
-from backend.utils.parser import parse_job_details_response, parse_jobs_response, parse_profile_response
+from backend.utils.parser import (
+    parse_job_details_response,
+    parse_jobs_response,
+    parse_profile_response,
+)
 
 MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5 MB
 
@@ -40,6 +44,7 @@ def _verify_session_access(session: ChatSession, x_user_id: str | None):
             raise HTTPException(status_code=403, detail="Authentication required for this session")
         if session.user_id != x_user_id:
             raise HTTPException(status_code=403, detail="Access denied")
+
 
 # In-memory agent sessions (thread_id -> agent instance)
 # Bounded TTL cache: max 200 agents, evict after 1 hour of inactivity.
@@ -213,16 +218,22 @@ async def chat_stream(
                         tool_names = [t.get("name", "unknown") for t in tool_calls]
                         # Map internal names to user-friendly labels
                         label = _tool_call_label(tool_names)
-                        yield _sse_event("agent_event", {
-                            "type": "tool_call",
-                            "tools": tool_names,
-                            "message": label,
-                        })
+                        yield _sse_event(
+                            "agent_event",
+                            {
+                                "type": "tool_call",
+                                "tools": tool_names,
+                                "message": label,
+                            },
+                        )
                     elif msg_type == "ToolMessage":
-                        yield _sse_event("agent_event", {
-                            "type": "tool_result",
-                            "message": "Processing results...",
-                        })
+                        yield _sse_event(
+                            "agent_event",
+                            {
+                                "type": "tool_result",
+                                "message": "Processing results...",
+                            },
+                        )
 
                 prev_msg_count = len(msgs)
 
@@ -233,24 +244,31 @@ async def chat_stream(
                     confirm_msg = ChatMessage(
                         session_id=session_id,
                         role="assistant",
-                        content="I'd like to search for jobs matching your profile. This will call external search APIs. Approve to proceed?",
+                        content=(
+                            "I'd like to search for jobs matching your profile."
+                            " This will call external search APIs."
+                            " Approve to proceed?"
+                        ),
                         message_type="confirmation",
                         extra_data={"interrupt": interrupt_info},
                     )
                     gen_db.add(confirm_msg)
                     gen_db.commit()
 
-                    yield _sse_event("confirmation", {
-                        "session_id": session_id,
-                        "requires_confirmation": True,
-                        "message": {
-                            "role": "assistant",
-                            "content": confirm_msg.content,
-                            "message_type": "confirmation",
-                            "extra_data": {"interrupt": interrupt_info},
-                            "created_at": confirm_msg.created_at.isoformat(),
+                    yield _sse_event(
+                        "confirmation",
+                        {
+                            "session_id": session_id,
+                            "requires_confirmation": True,
+                            "message": {
+                                "role": "assistant",
+                                "content": confirm_msg.content,
+                                "message_type": "confirmation",
+                                "extra_data": {"interrupt": interrupt_info},
+                                "created_at": confirm_msg.created_at.isoformat(),
+                            },
                         },
-                    })
+                    )
                     return  # Stream ends at interrupt
 
             # No interrupt - extract final response
@@ -266,25 +284,31 @@ async def chat_stream(
                 )
                 gen_db.add(assistant_msg)
 
-                chat_session = gen_db.query(ChatSession).filter(ChatSession.id == session_id).first()
+                chat_session = (
+                    gen_db.query(ChatSession).filter(ChatSession.id == session_id).first()
+                )
                 if chat_session:
                     chat_session.updated_at = datetime.now(UTC)
                 gen_db.commit()
 
-                yield _sse_event("done", {
-                    "session_id": session_id,
-                    "user_id": chat_session.user_id if chat_session else None,
-                    "message": {
-                        "role": "assistant",
-                        "content": agent_content,
-                        "message_type": message_type,
-                        "extra_data": extra_data,
-                        "created_at": assistant_msg.created_at.isoformat(),
+                yield _sse_event(
+                    "done",
+                    {
+                        "session_id": session_id,
+                        "user_id": chat_session.user_id if chat_session else None,
+                        "message": {
+                            "role": "assistant",
+                            "content": agent_content,
+                            "message_type": message_type,
+                            "extra_data": extra_data,
+                            "created_at": assistant_msg.created_at.isoformat(),
+                        },
                     },
-                })
+                )
 
         except Exception as e:
             import traceback
+
             error_msg = str(e) or f"{type(e).__name__}"
             tb = traceback.format_exc()
             print(f"[CHAT STREAM ERROR] {error_msg}\n{tb}")
@@ -327,7 +351,9 @@ async def confirm_action(
 
     async def event_generator() -> AsyncGenerator[str, None]:
         if approved:
-            yield _sse_event("status", {"stage": "searching", "message": "Approved! Searching for jobs..."})
+            yield _sse_event(
+                "status", {"stage": "searching", "message": "Approved! Searching for jobs..."}
+            )
         else:
             yield _sse_event("status", {"stage": "cancelled", "message": "Search cancelled."})
 
@@ -362,25 +388,34 @@ async def confirm_action(
                         if tool_calls:
                             tool_names = [t.get("name", "unknown") for t in tool_calls]
                             label = _tool_call_label(tool_names)
-                            yield _sse_event("agent_event", {
-                                "type": "tool_call",
-                                "tools": tool_names,
-                                "message": label,
-                            })
+                            yield _sse_event(
+                                "agent_event",
+                                {
+                                    "type": "tool_call",
+                                    "tools": tool_names,
+                                    "message": label,
+                                },
+                            )
                         elif msg_type == "ToolMessage":
-                            yield _sse_event("agent_event", {
-                                "type": "tool_result",
-                                "message": "Processing results...",
-                            })
+                            yield _sse_event(
+                                "agent_event",
+                                {
+                                    "type": "tool_result",
+                                    "message": "Processing results...",
+                                },
+                            )
 
                     prev_msg_count = len(msgs)
 
                     if _is_interrupt(chunk):
                         found_interrupt = True
-                        yield _sse_event("agent_event", {
-                            "type": "auto_approve",
-                            "message": "Auto-approving follow-up search...",
-                        })
+                        yield _sse_event(
+                            "agent_event",
+                            {
+                                "type": "auto_approve",
+                                "message": "Auto-approving follow-up search...",
+                            },
+                        )
 
                 # After first approve, always auto-approve subsequent interrupts
                 decision = approve_decision
@@ -413,17 +448,20 @@ async def confirm_action(
                 chat_session.updated_at = datetime.now(UTC)
             gen_db.commit()
 
-            yield _sse_event("done", {
-                "session_id": session_id,
-                "user_id": chat_session.user_id if chat_session else None,
-                "message": {
-                    "role": "assistant",
-                    "content": agent_content,
-                    "message_type": message_type,
-                    "extra_data": extra_data,
-                    "created_at": assistant_msg.created_at.isoformat(),
+            yield _sse_event(
+                "done",
+                {
+                    "session_id": session_id,
+                    "user_id": chat_session.user_id if chat_session else None,
+                    "message": {
+                        "role": "assistant",
+                        "content": agent_content,
+                        "message_type": message_type,
+                        "extra_data": extra_data,
+                        "created_at": assistant_msg.created_at.isoformat(),
+                    },
                 },
-            })
+            )
 
         except Exception as e:
             yield _sse_event("error", {"message": str(e)})
@@ -466,7 +504,10 @@ async def get_job_details(
     thread_id = session.thread_id
 
     async def event_generator() -> AsyncGenerator[str, None]:
-        yield _sse_event("status", {"stage": "scraping", "message": f"Getting details for {len(selected_urls)} jobs..."})
+        yield _sse_event(
+            "status",
+            {"stage": "scraping", "message": f"Getting details for {len(selected_urls)} jobs..."},
+        )
 
         gen_db = next(get_db())
         try:
@@ -492,7 +533,10 @@ async def get_job_details(
             )
             messages = [{"role": m.role, "content": m.content} for m in history]
             urls_text = "\n".join(f"- {url}" for url in selected_urls)
-            messages[-1] = {"role": "user", "content": f"Get detailed information for these selected jobs:\n{urls_text}"}
+            messages[-1] = {
+                "role": "user",
+                "content": f"Get detailed information for these selected jobs:\n{urls_text}",
+            }
 
             # Stream with real-time events, auto-approving firecrawl interrupts
             last_chunk = None
@@ -513,12 +557,21 @@ async def get_job_details(
                     if tool_calls:
                         tool_names = [t.get("name", "unknown") for t in tool_calls]
                         label = _tool_call_label(tool_names)
-                        yield _sse_event("agent_event", {"type": "tool_call", "tools": tool_names, "message": label})
+                        yield _sse_event(
+                            "agent_event",
+                            {"type": "tool_call", "tools": tool_names, "message": label},
+                        )
                     elif type(last_msg).__name__ == "ToolMessage":
-                        yield _sse_event("agent_event", {"type": "tool_result", "message": "Processing scraped data..."})
+                        yield _sse_event(
+                            "agent_event",
+                            {"type": "tool_result", "message": "Processing scraped data..."},
+                        )
 
                 if _is_interrupt(chunk):
-                    yield _sse_event("agent_event", {"type": "auto_approve", "message": "Auto-approving scrape..."})
+                    yield _sse_event(
+                        "agent_event",
+                        {"type": "auto_approve", "message": "Auto-approving scrape..."},
+                    )
                     break
 
             # Auto-approve loop for firecrawl interrupts
@@ -538,14 +591,22 @@ async def get_job_details(
                         if tool_calls:
                             tool_names = [t.get("name", "unknown") for t in tool_calls]
                             label = _tool_call_label(tool_names)
-                            yield _sse_event("agent_event", {"type": "tool_call", "tools": tool_names, "message": label})
+                            yield _sse_event(
+                                "agent_event",
+                                {"type": "tool_call", "tools": tool_names, "message": label},
+                            )
 
                     if _is_interrupt(chunk):
-                        yield _sse_event("agent_event", {"type": "auto_approve", "message": "Auto-approving scrape..."})
+                        yield _sse_event(
+                            "agent_event",
+                            {"type": "auto_approve", "message": "Auto-approving scrape..."},
+                        )
 
             # Extract final response
             if last_chunk:
-                agent_content, message_type, extra_data = _process_agent_result(last_chunk, is_detail_phase=True)
+                agent_content, message_type, extra_data = _process_agent_result(
+                    last_chunk, is_detail_phase=True
+                )
             else:
                 agent_content = "No details could be retrieved."
                 message_type = "text"
@@ -565,17 +626,20 @@ async def get_job_details(
                 chat_session.updated_at = datetime.now(UTC)
             gen_db.commit()
 
-            yield _sse_event("done", {
-                "session_id": session_id,
-                "user_id": chat_session.user_id if chat_session else None,
-                "message": {
-                    "role": "assistant",
-                    "content": agent_content,
-                    "message_type": message_type,
-                    "extra_data": extra_data,
-                    "created_at": assistant_msg.created_at.isoformat(),
+            yield _sse_event(
+                "done",
+                {
+                    "session_id": session_id,
+                    "user_id": chat_session.user_id if chat_session else None,
+                    "message": {
+                        "role": "assistant",
+                        "content": agent_content,
+                        "message_type": message_type,
+                        "extra_data": extra_data,
+                        "created_at": assistant_msg.created_at.isoformat(),
+                    },
                 },
-            })
+            )
 
         except Exception as e:
             yield _sse_event("error", {"message": str(e)})
@@ -632,9 +696,12 @@ async def chat(
     config = {"configurable": {"thread_id": session.thread_id}}
 
     # Build messages from history
-    history = db.query(ChatMessage).filter(
-        ChatMessage.session_id == session.id
-    ).order_by(ChatMessage.created_at).all()
+    history = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session.id)
+        .order_by(ChatMessage.created_at)
+        .all()
+    )
 
     messages = [{"role": m.role, "content": m.content} for m in history]
 
@@ -654,9 +721,12 @@ async def chat(
         db.add(confirm_msg)
         db.commit()
 
-        all_messages = db.query(ChatMessage).filter(
-            ChatMessage.session_id == session.id
-        ).order_by(ChatMessage.created_at).all()
+        all_messages = (
+            db.query(ChatMessage)
+            .filter(ChatMessage.session_id == session.id)
+            .order_by(ChatMessage.created_at)
+            .all()
+        )
 
         return ChatResponse(
             session_id=session.id,
@@ -688,9 +758,12 @@ async def chat(
     session.updated_at = datetime.now(UTC)
     db.commit()
 
-    all_messages = db.query(ChatMessage).filter(
-        ChatMessage.session_id == session.id
-    ).order_by(ChatMessage.created_at).all()
+    all_messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session.id)
+        .order_by(ChatMessage.created_at)
+        .all()
+    )
 
     return ChatResponse(
         session_id=session.id,
@@ -720,8 +793,12 @@ async def chat_with_cv(
     """Upload CV and start chat."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         # Return error as chat message
-        session = ChatSession() if not session_id else (
-            db.query(ChatSession).filter(ChatSession.id == session_id).first() or ChatSession()
+        session = (
+            ChatSession()
+            if not session_id
+            else (
+                db.query(ChatSession).filter(ChatSession.id == session_id).first() or ChatSession()
+            )
         )
         db.add(session)
         db.commit()
@@ -738,13 +815,15 @@ async def chat_with_cv(
         return ChatResponse(
             session_id=session.id,
             user_id=None,
-            messages=[ChatMessageResponse(
-                role="assistant",
-                content="Please upload a PDF file.",
-                message_type="text",
-                extra_data={},
-                created_at=error_msg.created_at,
-            )],
+            messages=[
+                ChatMessageResponse(
+                    role="assistant",
+                    content="Please upload a PDF file.",
+                    message_type="text",
+                    extra_data={},
+                    created_at=error_msg.created_at,
+                )
+            ],
         )
 
     # Check file size
@@ -836,9 +915,12 @@ async def chat_with_cv(
     db.commit()
 
     # Return all messages
-    all_messages = db.query(ChatMessage).filter(
-        ChatMessage.session_id == session.id
-    ).order_by(ChatMessage.created_at).all()
+    all_messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session.id)
+        .order_by(ChatMessage.created_at)
+        .all()
+    )
 
     return ChatResponse(
         session_id=session.id,
@@ -880,13 +962,15 @@ async def list_sessions(
             .first()
         )
         content = first_user_msg.content if first_user_msg else ""
-        result.append(ChatSessionResponse(
-            id=s.id,
-            title=content[:40] or "New conversation",
-            preview=content[:80],
-            created_at=s.created_at,
-            updated_at=s.updated_at,
-        ))
+        result.append(
+            ChatSessionResponse(
+                id=s.id,
+                title=content[:40] or "New conversation",
+                preview=content[:80],
+                created_at=s.created_at,
+                updated_at=s.updated_at,
+            )
+        )
 
     return ChatSessionListResponse(sessions=result)
 
@@ -930,9 +1014,12 @@ async def get_chat_history(
 
     _verify_session_access(session, x_user_id)
 
-    messages = db.query(ChatMessage).filter(
-        ChatMessage.session_id == session_id
-    ).order_by(ChatMessage.created_at).all()
+    messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at)
+        .all()
+    )
 
     return ChatResponse(
         session_id=session.id,
@@ -948,4 +1035,3 @@ async def get_chat_history(
             for m in messages
         ],
     )
-

@@ -55,3 +55,8 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/api/app.py" = ["E402"]
+"main.py" = ["E402"]
+"scripts/*.py" = ["E402"]

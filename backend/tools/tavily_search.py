@@ -54,9 +54,7 @@ def tavily_search(
         formatted = []
         for r in results.get("results", []):
             formatted.append(
-                f"**{r['title']}**\n"
-                f"URL: {r['url']}\n"
-                f"{r.get('content', 'No description')}\n"
+                f"**{r['title']}**\nURL: {r['url']}\n{r.get('content', 'No description')}\n"
             )
 
         if not formatted:

@@ -50,7 +50,9 @@ class Preferences(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), unique=True)
-    location_type: Mapped[str] = mapped_column(String(20), default="any")  # remote/onsite/hybrid/any
+    location_type: Mapped[str] = mapped_column(
+        String(20), default="any"
+    )  # remote/onsite/hybrid/any
     target_roles: Mapped[list] = mapped_column(JSON, default=list)
     excluded_companies: Mapped[list] = mapped_column(JSON, default=list)
     min_salary: Mapped[int | None] = mapped_column(default=None)
@@ -66,7 +68,9 @@ class SearchSession(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending/running/completed/failed
+    status: Mapped[str] = mapped_column(
+        String(20), default="pending"
+    )  # pending/running/completed/failed
     queries: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
@@ -132,7 +136,9 @@ class Bookmark(Base):
     __tablename__ = "bookmarks"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    session_id: Mapped[str] = mapped_column(String(36), index=True)  # Anonymous bookmarks by session
+    session_id: Mapped[str] = mapped_column(
+        String(36), index=True
+    )  # Anonymous bookmarks by session
     title: Mapped[str] = mapped_column(String(255))
     company: Mapped[str] = mapped_column(String(255))
     match_score: Mapped[float] = mapped_column(Float, default=0.0)

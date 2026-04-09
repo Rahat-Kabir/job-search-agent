@@ -75,8 +75,12 @@ def main():
         # Handle HITL interrupt
         if "__interrupt__" in result and len(result["__interrupt__"]) > 0:
             interrupt = result["__interrupt__"][0]
-            value = getattr(interrupt, "value", interrupt) if not isinstance(interrupt, dict) else interrupt
-            print(f"\n[HITL] Agent wants to call external search APIs.")
+            value = (
+                getattr(interrupt, "value", interrupt)
+                if not isinstance(interrupt, dict)
+                else interrupt
+            )
+            print("\n[HITL] Agent wants to call external search APIs.")
             if isinstance(value, dict):
                 desc = value.get("description", str(value))
                 print(f"[HITL] Details: {desc}")

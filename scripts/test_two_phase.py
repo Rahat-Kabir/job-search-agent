@@ -13,7 +13,6 @@ Usage:
     uv run python scripts/test_two_phase.py
 """
 
-import json
 import sys
 import time
 
@@ -59,7 +58,9 @@ Preference: Remote software engineering positions"""
     while "__interrupt__" in result and len(result["__interrupt__"]) > 0:
         interrupt_count += 1
         interrupt = result["__interrupt__"][0]
-        value = getattr(interrupt, "value", interrupt) if not isinstance(interrupt, dict) else interrupt
+        value = (
+            getattr(interrupt, "value", interrupt) if not isinstance(interrupt, dict) else interrupt
+        )
         print(f"  HITL Interrupt #{interrupt_count}: auto-approving... ({str(value)[:80]})")
         result = agent.invoke(
             Command(resume={"decisions": [{"type": "approve"}]}),
@@ -95,15 +96,15 @@ Preference: Remote software engineering positions"""
         return 1
 
     # Display Phase 1 results
-    print(f"\n  {'='*60}")
+    print(f"\n  {'=' * 60}")
     print(f"  PHASE 1 RESULTS: {len(all_jobs)} jobs (quick search)")
-    print(f"  {'='*60}")
+    print(f"  {'=' * 60}")
     for i, job in enumerate(all_jobs):
         score = job.get("score", 0)
         title = job.get("title", "Unknown")[:50]
         company = job.get("company", "Unknown")[:20]
         url = job.get("url", "")
-        print(f"  [{i+1:2d}] [{score:3d}%] {title} @ {company}")
+        print(f"  [{i + 1:2d}] [{score:3d}%] {title} @ {company}")
         if url:
             print(f"       URL: {url[:80]}")
 
@@ -172,9 +173,9 @@ Preference: Remote software engineering positions"""
     print(f"  Parsed {len(enriched_jobs)} enriched job records")
 
     # Display Phase 2 results
-    print(f"\n  {'='*60}")
-    print(f"  PHASE 2 RESULTS: Enriched details")
-    print(f"  {'='*60}")
+    print(f"\n  {'=' * 60}")
+    print("  PHASE 2 RESULTS: Enriched details")
+    print(f"  {'=' * 60}")
 
     if all_details:
         for detail in all_details:
@@ -197,7 +198,7 @@ Preference: Remote software engineering positions"""
         print(f"  No structured details parsed. Raw response:\n{last_content[:500]}")
 
     # Summary
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("SUMMARY")
     print(f"  Phase 1 (quick search): {len(all_jobs)} jobs found")
     print(f"  Phase 2 (detail scrape): {len(all_details)} jobs enriched")
@@ -205,7 +206,7 @@ Preference: Remote software engineering positions"""
     has_reqs = sum(1 for d in all_details if d.get("requirements"))
     print(f"  Jobs with salary info:  {has_salary}/{len(all_details)}")
     print(f"  Jobs with requirements: {has_reqs}/{len(all_details)}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     if len(all_jobs) >= 5:
         print("\nVERDICT: PASS — Two-phase search working!")

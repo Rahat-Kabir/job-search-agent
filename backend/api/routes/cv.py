@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from backend.agents.orchestrator import create_orchestrator_with_hitl, truncate_cv
 from backend.api.limiter import limiter
 from backend.api.schemas import CVUploadResponse, ProfileResponse, SkillResponse
-from backend.db import Profile, Preferences, User, get_db
+from backend.db import Preferences, Profile, User, get_db
 from backend.tools.pdf_parser import parse_pdf as parse_pdf_tool
 from backend.utils.parser import parse_profile_response
 
@@ -65,8 +65,7 @@ async def upload_cv(
 
     # Convert skills to list of dicts for JSON storage
     skills_json = [
-        {"name": s, "confidence": 1.0, "source": "explicit"}
-        for s in profile_data.get("skills", [])
+        {"name": s, "confidence": 1.0, "source": "explicit"} for s in profile_data.get("skills", [])
     ]
 
     profile = Profile(

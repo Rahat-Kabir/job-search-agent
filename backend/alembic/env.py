@@ -1,12 +1,11 @@
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from alembic import context
-
 from backend.config import settings
-from backend.db.base import Base
 from backend.db import tables  # noqa: F401 — ensure all models are registered
+from backend.db.base import Base
 
 config = context.config
 

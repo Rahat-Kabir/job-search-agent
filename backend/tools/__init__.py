@@ -7,9 +7,9 @@ Tools for the Job Search Agent.
 - firecrawl: Web scraping via Firecrawl API
 """
 
-from backend.tools.pdf_parser import parse_pdf
-from backend.tools.tavily_search import tavily_search
 from backend.tools.brave_search import brave_search
 from backend.tools.firecrawl import firecrawl_scrape
+from backend.tools.pdf_parser import parse_pdf
+from backend.tools.tavily_search import tavily_search
 
 __all__ = ["parse_pdf", "tavily_search", "brave_search", "firecrawl_scrape"]

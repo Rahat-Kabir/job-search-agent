@@ -83,7 +83,9 @@ Looking for: Remote software engineering positions"""
     while "__interrupt__" in result and len(result["__interrupt__"]) > 0:
         interrupt_count += 1
         interrupt = result["__interrupt__"][0]
-        value = getattr(interrupt, "value", interrupt) if not isinstance(interrupt, dict) else interrupt
+        value = (
+            getattr(interrupt, "value", interrupt) if not isinstance(interrupt, dict) else interrupt
+        )
         print(f"\n[4/5] HITL Interrupt #{interrupt_count}: {value}")
         print("  Auto-approving...")
 
@@ -162,7 +164,7 @@ Looking for: Remote software engineering positions"""
             locations[loc] = locations.get(loc, 0) + 1
 
         print(f"\n{'=' * 60}")
-        print(f"STATS")
+        print("STATS")
         print(f"  Total jobs:     {len(jobs)}")
         print(f"  Avg score:      {avg_score:.0f}%")
         print(f"  Score range:    {min(scores)}-{max(scores)}%")

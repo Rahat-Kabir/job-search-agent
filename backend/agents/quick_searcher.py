@@ -27,7 +27,9 @@ Process:
 4. Return top 15 as JSON array
 
 Return ONLY this JSON array (no markdown, no explanation):
-[{"title": "Job Title", "company": "Company", "score": 85, "reason": "brief match reason", "url": "https://...", "location": "remote"}]
+[{"title": "Job Title", "company": "Company", "score": 85,
+"reason": "brief match reason", "url": "https://...",
+"location": "remote"}]
 
 Rules:
 - MAX 15 jobs (aim for at least 10)
@@ -43,7 +45,11 @@ def get_quick_searcher_config() -> dict:
     """Get quick searcher sub-agent config (search only, no scraping)."""
     return {
         "name": "quick-searcher",
-        "description": "Fast job search using web search. Returns compact JSON array with title/company/score/reason/url. No deep scraping.",
+        "description": (
+            "Fast job search using web search."
+            " Returns compact JSON array with"
+            " title/company/score/reason/url. No deep scraping."
+        ),
         "system_prompt": QUICK_SEARCHER_PROMPT,
         "tools": [tavily_search, brave_search],
     }

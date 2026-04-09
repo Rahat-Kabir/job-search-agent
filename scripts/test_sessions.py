@@ -15,8 +15,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from backend.db.base import init_db, get_db
-from backend.db.tables import ChatSession, ChatMessage
+from backend.db.base import get_db, init_db
+from backend.db.tables import ChatMessage, ChatSession
 
 
 def test_session_crud():
@@ -45,7 +45,7 @@ def test_session_crud():
     )
     db.add_all([user_msg, assistant_msg])
     db.commit()
-    print(f"[OK] Added 2 messages to session")
+    print("[OK] Added 2 messages to session")
 
     # 2. List sessions — verify ours appears
     sessions = db.query(ChatSession).order_by(ChatSession.updated_at.desc()).all()
@@ -77,7 +77,7 @@ def test_session_crud():
     remaining_msgs = db.query(ChatMessage).filter(ChatMessage.session_id == session.id).count()
     assert remaining_msgs == 0, f"Messages still exist: {remaining_msgs}"
 
-    print(f"[OK] Session and messages deleted successfully")
+    print("[OK] Session and messages deleted successfully")
     print("\nAll tests passed!")
 
     db.close()

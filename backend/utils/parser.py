@@ -88,9 +88,9 @@ def _try_fenced_any(text: str) -> dict | list | None:
 def _try_find_json_bounds(text: str) -> dict | list | None:
     """Find JSON by matching brackets/braces."""
     # Try to find array first
-    array_start = text.find('[')
+    array_start = text.find("[")
     if array_start != -1:
-        result = _extract_balanced(text, array_start, '[', ']')
+        result = _extract_balanced(text, array_start, "[", "]")
         if result:
             try:
                 return json.loads(result)
@@ -98,9 +98,9 @@ def _try_find_json_bounds(text: str) -> dict | list | None:
                 pass
 
     # Try object
-    obj_start = text.find('{')
+    obj_start = text.find("{")
     if obj_start != -1:
-        result = _extract_balanced(text, obj_start, '{', '}')
+        result = _extract_balanced(text, obj_start, "{", "}")
         if result:
             try:
                 return json.loads(result)
@@ -121,7 +121,7 @@ def _extract_balanced(text: str, start: int, open_char: str, close_char: str) ->
             escape_next = False
             continue
 
-        if char == '\\' and in_string:
+        if char == "\\" and in_string:
             escape_next = True
             continue
 
@@ -137,27 +137,27 @@ def _extract_balanced(text: str, start: int, open_char: str, close_char: str) ->
         elif char == close_char:
             depth -= 1
             if depth == 0:
-                return text[start:i + 1]
+                return text[start : i + 1]
 
     return None
 
 
 def _try_line_by_line(text: str) -> dict | list | None:
     """Try to find JSON by joining lines that look like JSON."""
-    lines = text.split('\n')
+    lines = text.split("\n")
     json_lines = []
     in_json = False
 
     for line in lines:
         stripped = line.strip()
-        if stripped.startswith(('{', '[')) and not in_json:
+        if stripped.startswith(("{", "[")) and not in_json:
             in_json = True
             json_lines = [line]
         elif in_json:
             json_lines.append(line)
-            if stripped.endswith(('}', ']')):
+            if stripped.endswith(("}", "]")):
                 try:
-                    return json.loads('\n'.join(json_lines))
+                    return json.loads("\n".join(json_lines))
                 except json.JSONDecodeError:
                     # Keep trying
                     pass
@@ -204,7 +204,7 @@ def _parse_profile_markdown(text: str) -> dict:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             skills_str = match.group(1).strip()
-            result["skills"] = [s.strip() for s in re.split(r'[,;]', skills_str) if s.strip()]
+            result["skills"] = [s.strip() for s in re.split(r"[,;]", skills_str) if s.strip()]
             break
 
     # Experience years
@@ -229,7 +229,7 @@ def _parse_profile_markdown(text: str) -> dict:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             titles_str = match.group(1).strip()
-            result["titles"] = [t.strip() for t in re.split(r'[,;]', titles_str) if t.strip()]
+            result["titles"] = [t.strip() for t in re.split(r"[,;]", titles_str) if t.strip()]
             break
 
     # Summary
@@ -295,12 +295,14 @@ def _normalize_job(data: dict) -> dict:
     # Handle various score formats
     score = data.get("score", 0)
     if isinstance(score, str):
-        score_match = re.search(r'\d+', score)
+        score_match = re.search(r"\d+", score)
         score = int(score_match.group()) if score_match else 0
 
     return {
         "title": data.get("title", "") or data.get("job_title", "") or data.get("position", ""),
-        "company": data.get("company", "") or data.get("company_name", "") or data.get("employer", ""),
+        "company": data.get("company", "")
+        or data.get("company_name", "")
+        or data.get("employer", ""),
         "score": score,
         "reason": data.get("reason", "") or data.get("match_reason", "") or data.get("why", ""),
         "url": data.get("url", "") or data.get("link", "") or data.get("posting_url", ""),
@@ -328,7 +330,7 @@ def _parse_jobs_markdown(text: str) -> list[dict]:
     results = []
 
     # Split by numbered items: 1. **Title** or ### 1. Title
-    job_blocks = re.split(r'\n(?:\d+[\.\)]\s+\*\*|###?\s*\d+)', text)
+    job_blocks = re.split(r"\n(?:\d+[\.\)]\s+\*\*|###?\s*\d+)", text)
 
     for block in job_blocks[1:]:  # Skip first empty split
         job = _parse_single_job_markdown(block)
@@ -337,7 +339,7 @@ def _parse_jobs_markdown(text: str) -> list[dict]:
 
     # If numbered split didn't work, try bullet points
     if not results:
-        job_blocks = re.split(r'\n[-•]\s+\*\*', text)
+        job_blocks = re.split(r"\n[-•]\s+\*\*", text)
         for block in job_blocks[1:]:
             job = _parse_single_job_markdown(block)
             if job.get("title"):
@@ -351,7 +353,7 @@ def _parse_single_job_markdown(block: str) -> dict:
     job: dict[str, Any] = {}
 
     # Title extraction patterns
-    title_line = block.split('\n')[0]
+    title_line = block.split("\n")[0]
 
     # Pattern: Title** at Company (Score: XX%)
     m = re.match(r"([^*]+)\*\*\s*(?:at\s+([^(]+))?\s*\(Score:\s*(\d+)", title_line)
@@ -402,7 +404,7 @@ def _parse_single_job_markdown(block: str) -> dict:
     else:
         url_match = re.search(r"(?:URL|Link)?:?\s*(https?://[^\s\)]+)", block)
         if url_match:
-            job["url"] = url_match.group(1).rstrip('.,;')
+            job["url"] = url_match.group(1).rstrip(".,;")
 
     # Location
     job["location"] = "unknown"

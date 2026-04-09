@@ -23,7 +23,10 @@ def get_cv_parser_config() -> dict:
     """Get CV parser sub-agent config (token-optimized)."""
     return {
         "name": "cv-parser",
-        "description": "Extract compact profile from CV. Returns JSON with skills, experience, titles, summary.",
+        "description": (
+            "Extract compact profile from CV."
+            " Returns JSON with skills, experience, titles, summary."
+        ),
         "system_prompt": CV_PARSER_PROMPT,
         "tools": [],
     }

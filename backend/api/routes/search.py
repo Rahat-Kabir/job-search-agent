@@ -57,7 +57,9 @@ def run_search(search_id: str, profile_context: str, db_url: str):
         # Auto-approve any HITL interrupts (user already initiated search explicitly)
         while "__interrupt__" in result and len(result["__interrupt__"]) > 0:
             logger.info(f"[{search_id}] Auto-approving HITL interrupt...")
-            result = agent.invoke(Command(resume={"decisions": [{"type": "approve"}]}), config=config)
+            result = agent.invoke(
+                Command(resume={"decisions": [{"type": "approve"}]}), config=config
+            )
 
         # Status: Searching jobs
         _update_status(db, search_id, "searching_jobs")
@@ -70,7 +72,9 @@ def run_search(search_id: str, profile_context: str, db_url: str):
         # Auto-approve any remaining HITL interrupts
         while "__interrupt__" in result and len(result["__interrupt__"]) > 0:
             logger.info(f"[{search_id}] Auto-approving HITL interrupt...")
-            result = agent.invoke(Command(resume={"decisions": [{"type": "approve"}]}), config=config)
+            result = agent.invoke(
+                Command(resume={"decisions": [{"type": "approve"}]}), config=config
+            )
 
         # Status: Ranking results
         _update_status(db, search_id, "ranking_results")
@@ -136,14 +140,14 @@ def start_search(
     titles_str = ", ".join(profile.job_titles or [])
 
     profile_context = f"""Skills: {skills_str}
-Experience: {profile.experience_years or 'Unknown'} years
+Experience: {profile.experience_years or "Unknown"} years
 Recent Roles: {titles_str}
 Summary: {profile.summary}"""
 
     if prefs:
         profile_context += f"""
 Location preference: {prefs.location_type}
-Target roles: {', '.join(prefs.target_roles or [])}"""
+Target roles: {", ".join(prefs.target_roles or [])}"""
 
     # Create search session
     search = SearchSession(

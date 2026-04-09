@@ -100,7 +100,13 @@ def test_search_interrupt(agent):
 
     # First, give the agent a profile context
     messages = [
-        {"role": "user", "content": "I'm a Python developer with 5 years experience in FastAPI and React. Find jobs for me."}
+        {
+            "role": "user",
+            "content": (
+                "I'm a Python developer with 5 years experience"
+                " in FastAPI and React. Find jobs for me."
+            ),
+        }
     ]
 
     try:
@@ -111,8 +117,12 @@ def test_search_interrupt(agent):
         if has_interrupt:
             interrupts = result["__interrupt__"]
             interrupt = interrupts[0]
-            value = getattr(interrupt, "value", interrupt) if not isinstance(interrupt, dict) else interrupt
-            print(f"OK: HITL interrupt fired!")
+            value = (
+                getattr(interrupt, "value", interrupt)
+                if not isinstance(interrupt, dict)
+                else interrupt
+            )
+            print("OK: HITL interrupt fired!")
             print(f"    Interrupt value: {str(value)[:200]}")
 
             # Test resume with approval
@@ -135,13 +145,14 @@ def test_search_interrupt(agent):
         else:
             response_msgs = result.get("messages", [])
             content = getattr(response_msgs[-1], "content", "") if response_msgs else ""
-            print(f"INFO: No interrupt fired (agent may not have tried search tools)")
+            print("INFO: No interrupt fired (agent may not have tried search tools)")
             print(f"    Response: {content[:200]}...")
             return True
 
     except Exception as e:
         print(f"FAIL: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

@@ -6,9 +6,8 @@ Optimized for minimal token usage.
 """
 
 from datetime import datetime
-from typing import Any
-
 from pathlib import Path
+from typing import Any
 
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
@@ -55,8 +54,10 @@ Detect user intent and respond appropriately:
 
 ## Sub-agents
 - cv-parser: Extract profile → returns JSON {{skills, experience_years, titles, summary}}
-- quick-searcher: Fast job search → returns JSON array [{{title, company, score, reason, url, location}}]
-- detail-scraper: Deep scrape selected URLs → returns JSON array [{{url, salary, description, requirements, benefits}}]
+- quick-searcher: Fast job search → returns JSON array
+  [{{title, company, score, reason, url, location}}]
+- detail-scraper: Deep scrape selected URLs → returns JSON array
+  [{{url, salary, description, requirements, benefits}}]
 
 ## Two-Phase Job Search Flow
 **Phase 1 - Quick Search:**
@@ -99,10 +100,10 @@ def truncate_cv(cv_text: str, max_chars: int = 4000) -> str:
         return cv_text
 
     # Try to find key sections
-    lines = cv_text.split('\n')
+    lines = cv_text.split("\n")
     essential_lines = []
     in_section = False
-    skip_sections = ['reference', 'declaration', 'certif']
+    skip_sections = ["reference", "declaration", "certif"]
 
     for line in lines:
         line_lower = line.lower().strip()
@@ -113,16 +114,19 @@ def truncate_cv(cv_text: str, max_chars: int = 4000) -> str:
             continue
 
         # Keep lines from important sections
-        if any(kw in line_lower for kw in ['skill', 'experience', 'education', 'objective', 'summary', 'project']):
+        if any(
+            kw in line_lower
+            for kw in ["skill", "experience", "education", "objective", "summary", "project"]
+        ):
             in_section = True
 
         if in_section or len(essential_lines) < 50:
             essential_lines.append(line)
 
-        if len('\n'.join(essential_lines)) > max_chars:
+        if len("\n".join(essential_lines)) > max_chars:
             break
 
-    result = '\n'.join(essential_lines)
+    result = "\n".join(essential_lines)
     if len(result) > max_chars:
         result = result[:max_chars] + "\n[truncated]"
 
@@ -170,8 +174,12 @@ def create_orchestrator(
     backend = CompositeBackend(
         default=FilesystemBackend(root_dir=agent_data_dir),  # Default ephemeral scratch
         routes={
-            "/memories/": FilesystemBackend(root_dir=agent_data_dir + "/memories"),   # Cross-session memories
-            "/workspace/": FilesystemBackend(root_dir=agent_data_dir + "/workspace"),  # Persistent search results
+            "/memories/": FilesystemBackend(
+                root_dir=agent_data_dir + "/memories"
+            ),  # Cross-session memories
+            "/workspace/": FilesystemBackend(
+                root_dir=agent_data_dir + "/workspace"
+            ),  # Persistent search results
         },
     )
 
@@ -180,8 +188,8 @@ def create_orchestrator(
         "tools": [],
         "system_prompt": ORCHESTRATOR_PROMPT,
         "subagents": subagents,
-        "backend": backend,         # Used by built-in SummarizationMiddleware + FilesystemMiddleware
-        "memory": [AGENTS_MD],      # Persistent agent memory loaded into system prompt
+        "backend": backend,  # Used by built-in SummarizationMiddleware + FilesystemMiddleware
+        "memory": [AGENTS_MD],  # Persistent agent memory loaded into system prompt
     }
 
     if checkpointer:

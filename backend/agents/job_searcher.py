@@ -5,9 +5,9 @@ Searches for jobs and returns COMPACT results.
 Optimized for token efficiency.
 """
 
-from backend.tools.tavily_search import tavily_search
 from backend.tools.brave_search import brave_search
 from backend.tools.firecrawl import firecrawl_scrape
+from backend.tools.tavily_search import tavily_search
 
 JOB_SEARCHER_PROMPT = """You are a job searcher. Find and rank jobs.
 
@@ -27,7 +27,9 @@ Process:
 4. Return top 15 as JSON array
 
 Return ONLY this JSON array (no markdown, no explanation):
-[{"title": "Job Title", "company": "Company", "score": 85, "reason": "brief match reason", "url": "https://...", "location": "remote"}]
+[{"title": "Job Title", "company": "Company", "score": 85,
+"reason": "brief match reason", "url": "https://...",
+"location": "remote"}]
 
 Rules:
 - MAX 15 jobs (aim for at least 10)
@@ -43,7 +45,9 @@ def get_job_searcher_config() -> dict:
     """Get job searcher sub-agent config (token-optimized)."""
     return {
         "name": "job-searcher",
-        "description": "Search jobs, return compact JSON array with title/company/score/reason/url.",
+        "description": (
+            "Search jobs, return compact JSON array with title/company/score/reason/url."
+        ),
         "system_prompt": JOB_SEARCHER_PROMPT,
         "tools": [tavily_search, brave_search, firecrawl_scrape],
     }

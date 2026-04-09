@@ -19,7 +19,7 @@ import time
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
-from backend.agents.orchestrator import create_orchestrator, SEARCH_TOOL_INTERRUPT
+from backend.agents.orchestrator import SEARCH_TOOL_INTERRUPT, create_orchestrator
 
 
 def format_chunk(chunk) -> dict:
@@ -60,7 +60,11 @@ async def main():
     ):
         info = format_chunk(chunk)
         chunks.append(info)
-        print(f"  Chunk {len(chunks)}: {info['type']} tools={info['tool_calls']} interrupt={info['interrupt']}")
+        print(
+            f"  Chunk {len(chunks)}: {info['type']}"
+            f" tools={info['tool_calls']}"
+            f" interrupt={info['interrupt']}"
+        )
 
     print(f"  Streamed {len(chunks)} chunks in {time.time() - t0:.1f}s")
     final = chunks[-1]
@@ -79,7 +83,17 @@ async def main():
     got_tool_call = False
 
     async for chunk in agent.astream(
-        {"messages": [{"role": "user", "content": "Find remote Python developer jobs, 5yr experience with FastAPI, React, Docker, AWS"}]},
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "Find remote Python developer jobs,"
+                        " 5yr experience with FastAPI, React, Docker, AWS"
+                    ),
+                }
+            ]
+        },
         config=config2,
         stream_mode="values",
     ):
@@ -159,32 +173,32 @@ async def main():
     print(f"  Found {len(jobs)} jobs in final response")
 
     if jobs:
-        print(f"\n  {'='*60}")
+        print(f"\n  {'=' * 60}")
         print(f"  SEARCH RESULTS: {len(jobs)} jobs")
-        print(f"  {'='*60}")
+        print(f"  {'=' * 60}")
         for i, job in enumerate(jobs[:5]):
             score = job.get("score", 0)
             title = job.get("title", "Unknown")[:45]
             company = job.get("company", "Unknown")[:20]
-            print(f"  [{i+1}] [{score:3d}%] {title} @ {company}")
+            print(f"  [{i + 1}] [{score:3d}%] {title} @ {company}")
         if len(jobs) > 5:
             print(f"  ... and {len(jobs) - 5} more")
 
     # Summary
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("SUMMARY")
     print(f"  Basic streaming: OK ({chunks[0]['type']} -> ... -> AIMessage)")
     print(f"  HITL interrupt detected: {got_interrupt}")
     print(f"  Tool calls detected: {got_tool_call}")
     print(f"  Total search chunks: {len(all_chunks)}")
     print(f"  Jobs found: {len(jobs)}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
     if len(jobs) >= 5 and got_interrupt and got_tool_call:
         print("\nVERDICT: PASS -- Streaming + CompositeBackend working!")
         return 0
     else:
-        print(f"\nVERDICT: NEEDS WORK")
+        print("\nVERDICT: NEEDS WORK")
         return 1
 
 
