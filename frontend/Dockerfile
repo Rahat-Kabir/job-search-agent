@@ -6,8 +6,11 @@ WORKDIR /app
 # Copy dependency files first (layer caching)
 COPY package.json package-lock.json ./
 
-# Install dependencies (--force: skip Windows-only platform checks from lockfile)
-RUN npm ci --force
+# Install dependencies
+# - --ignore-scripts: prevent esbuild ETXTBSY race during postinstall
+# - --force: skip Windows-only platform checks from lockfile
+# Then run postinstall scripts separately after binaries are fully written
+RUN npm ci --force --ignore-scripts && npm rebuild esbuild
 
 # Copy source + configs
 COPY index.html vite.config.js eslint.config.js ./
